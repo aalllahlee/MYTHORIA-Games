@@ -16,6 +16,10 @@ data class HudSnapshot(
     val obstaclesPassed: Int = 0,
     val dashCooldownFraction: Float = 0f,
     val checkpointReached: Int = 0,
+    val totalCheckpoints: Int = 4,
+    val checkpointBannerText: String = "",
+    val isPlayerRespawning: Boolean = false,
+    val respawnProgress: Float = 0f,
     val fps: Int = 60,
     val isVictory: Boolean = false,
     val isFailed: Boolean = false,
@@ -58,7 +62,8 @@ data class RuntimeRival(
     var respawnZ: Float = 1.5f,
     var finished: Boolean = false,
     var finishOrder: Int = 0,
-    var finishTimeMs: Long = 0L
+    var finishTimeMs: Long = 0L,
+    val checkpointState: PlayerCheckpointState = PlayerCheckpointState(playerId = "rival_$id")
 )
 
 data class RuntimePlatform(
@@ -120,6 +125,12 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
     val rivals = ArrayList<RuntimeRival>()
     val particles = ArrayList<Particle>(160)
 
+    // Per-checkpoint activation animation pulse timers (checkpointIndex -> remainingSec)
+    val checkpointPulseTimers = HashMap<Int, Float>()
+
+    // Independent Checkpoint & Respawn State for Local Player ("player_0")
+    val playerCheckpointState = PlayerCheckpointState(playerId = "player_0")
+
     // Player physics state
     var px = 0f
     var py = 1.6f
@@ -148,6 +159,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
     var spawnY = 1.8f
     var spawnZ = 1.5f
     var highestCheckpointIndex = 0
+    var checkpointBannerTimer = 0f
+    var checkpointBannerText = ""
+    var timeAttackPenaltySec = 2.0f
+    var endlessSurvivalRespawnsRemaining = 0
     var coinsCollected = 0
     var elapsedSec = 0f
     var maxDistanceM = 0f
@@ -218,6 +233,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         coins.clear()
         activeObstacles.clear()
         activeCheckpoints.clear()
+        checkpointPulseTimers.clear()
         rivals.clear()
         particles.clear()
         speedMultiplier = 1.0f
@@ -258,6 +274,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         activeObstacles.addAll(level.obstacles)
         activeCheckpoints.clear()
         activeCheckpoints.addAll(level.checkpoints)
+        checkpointPulseTimers.clear()
         rivals.clear()
         particles.clear()
 
@@ -265,6 +282,9 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         spawnY = level.startY
         spawnZ = level.startZ
         highestCheckpointIndex = 0
+        checkpointBannerTimer = 0f
+        checkpointBannerText = ""
+        endlessSurvivalRespawnsRemaining = 0
         coinsCollected = 0
         elapsedSec = 0f
         maxDistanceM = 0f
@@ -281,6 +301,28 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         nextFinishOrder = 1
         playerFinishOrder = 0
 
+        // Reset local player's independent checkpoint state to Checkpoint 0 (Start Island)
+        playerCheckpointState.apply {
+            currentX = level.startX
+            currentY = level.startY + 0.6f
+            currentZ = level.startZ
+            lastActivatedCheckpoint = 0
+            activatedCheckpoints.clear()
+            activatedCheckpoints.add(0)
+            safeRespawnX = level.startX
+            safeRespawnY = level.startY + 0.6f
+            safeRespawnZ = level.startZ
+            safeRespawnYaw = 180f
+            isRespawning = false
+            respawnTimerSec = 0f
+            fallAnimTimerSec = 0f
+            arrivalAnimTimerSec = 0f
+            portalScale = 0f
+            raceProgress = 0f
+            finished = false
+            respawnCount = 0
+        }
+
         if (mode == GameMode.RIVAL_RACE) {
             spawnAiRivals(level)
         }
@@ -294,7 +336,8 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         respawnPlayer(fullReset = true)
     }
 
-    private fun spawnAiRivals(level: LevelDef) {
+    fun spawnAiRivals(level: LevelDef = currentLevel) {
+        rivals.clear()
         val candidateSkins = GameCatalog.skins.filter { it.id != selectedSkin.id }
         val offsets = listOf(-2.4f, -0.9f, 0.9f, 2.4f)
         val speeds = listOf(8.25f, 7.85f, 7.50f, 7.15f)
@@ -305,7 +348,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             val sx = level.startX + offsets[i]
             val sy = level.startY + 0.5f
             val sz = level.startZ + (i % 2) * 0.6f
-            rivals += RuntimeRival(
+            val rival = RuntimeRival(
                 id = i + 1,
                 name = skin.name,
                 skin = skin,
@@ -321,7 +364,245 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                 respawnZ = sz,
                 animTime = i * 0.45f
             )
+            rival.checkpointState.apply {
+                currentX = sx
+                currentY = sy
+                currentZ = sz
+                lastActivatedCheckpoint = 0
+                activatedCheckpoints.clear()
+                activatedCheckpoints.add(0)
+                safeRespawnX = sx
+                safeRespawnY = sy
+                safeRespawnZ = sz
+                safeRespawnYaw = 180f
+                isRespawning = false
+                respawnTimerSec = 0f
+                fallAnimTimerSec = 0f
+                arrivalAnimTimerSec = 0f
+                portalScale = 0f
+                raceProgress = 0f
+                finished = false
+                respawnCount = 0
+            }
+            rivals += rival
         }
+    }
+
+    /**
+     * Returns the independent [PlayerCheckpointState] for `"player_0"` or `"rival_1".."rival_4"`.
+     */
+    fun getRacerCheckpointState(playerId: String): PlayerCheckpointState? {
+        if (playerId == "player_0") return playerCheckpointState
+        val rival = rivals.firstOrNull { it.checkpointState.playerId == playerId || "rival_${it.id}" == playerId }
+        return rival?.checkpointState
+    }
+
+    /**
+     * Computes a guaranteed safe respawn position above the checkpoint platform,
+     * ensuring the player never spawns inside an obstacle or off the platform edge.
+     */
+    fun findSafeCheckpointPosition(cp: CheckpointDef, laneOffsetX: Float = 0f): Triple<Float, Float, Float> {
+        var safeX = cp.x + laneOffsetX.coerceIn(-1.8f, 1.8f)
+        var safeY = cp.y + 0.62f
+        val safeZ = cp.z
+
+        // Snap to actual top of underlying checkpoint platform if present
+        for (i in 0 until platforms.size) {
+            val rp = platforms[i]
+            if (!rp.active) continue
+            if (abs(cp.x - rp.curX) <= rp.def.w * 0.5f && abs(cp.z - rp.curZ) <= rp.def.d * 0.5f) {
+                safeY = maxOf(safeY, rp.curY + rp.def.h * 0.5f + 0.55f)
+                val maxLat = (rp.def.w * 0.5f - 0.65f).coerceAtLeast(0f)
+                safeX = (cp.x + laneOffsetX).coerceIn(rp.curX - maxLat, rp.curX + maxLat)
+                break
+            }
+        }
+
+        // Verify clearance from any nearby obstacle
+        for (i in 0 until activeObstacles.size) {
+            val obs = activeObstacles[i]
+            if (abs(obs.z - safeZ) < 1.8f && abs(obs.x - safeX) < 1.5f) {
+                safeX = if (obs.x >= cp.x) cp.x - 1.6f else cp.x + 1.6f
+            }
+        }
+        return Triple(safeX, safeY, safeZ)
+    }
+
+    /**
+     * Activates checkpoint [checkpointIndex] for the local player (`"player_0"`) or any rival (`"rival_1"..`),
+     * enforcing strict forward checkpoint progression (never regressing on backward movement, and
+     * activating sequential checkpoints in order).
+     */
+    fun activateCheckpointForRacer(playerId: String, checkpointIndex: Int): Boolean {
+        val cp = activeCheckpoints.firstOrNull { it.index == checkpointIndex } ?: return false
+        if (playerId == "player_0") {
+            return tryActivateCheckpointForPlayer(cp)
+        }
+        val rival = rivals.firstOrNull { it.checkpointState.playerId == playerId || "rival_${it.id}" == playerId }
+            ?: return false
+        return tryActivateCheckpointForRival(rival, cp)
+    }
+
+    private fun tryActivateCheckpointForPlayer(cp: CheckpointDef): Boolean {
+        // Strict ordered progression: only activate the next sequential checkpoint (last + 1).
+        // Moving backward to an already-activated checkpoint (cp.index <= lastActivatedCheckpoint)
+        // or skipping unreached checkpoints (cp.index > lastActivatedCheckpoint + 1) is ignored.
+        if (cp.index != playerCheckpointState.lastActivatedCheckpoint + 1) return false
+
+        val (safeX, safeY, safeZ) = findSafeCheckpointPosition(cp, 0f)
+        playerCheckpointState.lastActivatedCheckpoint = cp.index
+        playerCheckpointState.activatedCheckpoints.add(cp.index)
+        playerCheckpointState.safeRespawnX = safeX
+        playerCheckpointState.safeRespawnY = safeY
+        playerCheckpointState.safeRespawnZ = safeZ
+        playerCheckpointState.safeRespawnYaw = cp.safeYaw
+
+        highestCheckpointIndex = cp.index
+        spawnX = safeX
+        spawnY = safeY
+        spawnZ = safeZ
+        if (currentMode == GameMode.ENDLESS) {
+            endlessSurvivalRespawnsRemaining = 1
+        }
+
+        checkpointPulseTimers[cp.index] = 1.25f
+        val totalCps = activeCheckpoints.size.coerceAtLeast(1)
+        checkpointBannerTimer = 2.4f
+        checkpointBannerText = if ( currentMode == GameMode.ENDLESS ) {
+            "CHECKPOINT ${cp.index} ACTIVATED!"
+        } else {
+            "CHECKPOINT ${cp.index} / $totalCps ACTIVATED!"
+        }
+
+        listener?.onSfx("checkpoint")
+        listener?.onHaptic(false)
+        // Golden runes + Glowing sapphire blue magical Mythoria particle burst
+        spawnBurst(cp.x, cp.y + 1.4f, cp.z, 12, Rgba.fromHex(0xFFD22B), 3.8f)
+        spawnBurst(cp.x, cp.y + 1.7f, cp.z, 10, Rgba.fromHex(0x00E5FF), 3.4f)
+        return true
+    }
+
+    private fun tryActivateCheckpointForRival(r: RuntimeRival, cp: CheckpointDef): Boolean {
+        val state = r.checkpointState
+        if (cp.index != state.lastActivatedCheckpoint + 1) return false
+
+        val (safeX, safeY, safeZ) = findSafeCheckpointPosition(cp, r.laneBiasX * 0.45f)
+        state.lastActivatedCheckpoint = cp.index
+        state.activatedCheckpoints.add(cp.index)
+        state.safeRespawnX = safeX
+        state.safeRespawnY = safeY
+        state.safeRespawnZ = safeZ
+        state.safeRespawnYaw = cp.safeYaw
+
+        r.respawnX = safeX
+        r.respawnY = safeY
+        r.respawnZ = safeZ
+
+        checkpointPulseTimers[cp.index] = maxOf(checkpointPulseTimers[cp.index] ?: 0f, 0.9f)
+        spawnBurst(cp.x, cp.y + 1.3f, cp.z, 6, Rgba.fromHex(0xFFD22B), 3.0f)
+        spawnBurst(cp.x, cp.y + 1.5f, cp.z, 6, Rgba.fromHex(0x00E5FF), 2.8f)
+        return true
+    }
+
+    /**
+     * Individual non-blocking respawn for ONLY the local player (`"player_0"`).
+     * Never resets the match, never resets the timer, and never interrupts any rival or platform/obstacle!
+     */
+    private fun triggerIndividualRespawnForPlayer() {
+        // In Survival/Endless Mode, do not grant unlimited respawns unless a periodic checkpoint was earned
+        if (currentMode == GameMode.ENDLESS && endlessSurvivalRespawnsRemaining <= 0) {
+            runFailed = true
+            listener?.onSfx("fail")
+            listener?.onHaptic(true)
+            listener?.onPlayerFell()
+            return
+        }
+        if (currentMode == GameMode.ENDLESS && endlessSurvivalRespawnsRemaining > 0) {
+            endlessSurvivalRespawnsRemaining--
+        }
+
+        // Fall particles at fall location before portal teleport
+        spawnBurst(px, py + 0.5f, pz, 10, Rgba.fromHex(0x00E5FF), 3.2f)
+
+        val safeX = playerCheckpointState.safeRespawnX
+        val safeY = playerCheckpointState.safeRespawnY
+        val safeZ = playerCheckpointState.safeRespawnZ
+        val safeYaw = playerCheckpointState.safeRespawnYaw
+
+        px = safeX
+        py = safeY
+        pz = safeZ
+        vx = 0f
+        vy = 0f
+        vz = 0f
+        playerYaw = safeYaw
+        grounded = false
+        diveTimer = 0f
+        hitStunTimer = 0f
+        squashY = 1.24f
+
+        playerCheckpointState.currentX = px
+        playerCheckpointState.currentY = py
+        playerCheckpointState.currentZ = pz
+        playerCheckpointState.isRespawning = true
+        playerCheckpointState.respawnTimerSec = 1.05f
+        playerCheckpointState.fallAnimTimerSec = 0.25f
+        playerCheckpointState.arrivalAnimTimerSec = 0.80f
+        playerCheckpointState.portalScale = 1.0f
+        playerCheckpointState.respawnCount++
+
+        if (currentMode == GameMode.TIME_ATTACK) {
+            elapsedSec += timeAttackPenaltySec
+            checkpointBannerTimer = 2.0f
+            checkpointBannerText = "PORTAL RESPAWN (+${String.format("%.1f", timeAttackPenaltySec)}s)"
+        } else {
+            val cpLabel = if (playerCheckpointState.lastActivatedCheckpoint > 0) {
+                "CHECKPOINT ${playerCheckpointState.lastActivatedCheckpoint}"
+            } else {
+                "START SANCTUARY"
+            }
+            checkpointBannerTimer = 1.6f
+            checkpointBannerText = "RESPAWNED AT $cpLabel"
+        }
+
+        listener?.onSfx("checkpoint")
+        listener?.onHaptic(true)
+        // Golden & Sapphire portal arrival burst at the checkpoint
+        spawnBurst(px, py + 0.4f, pz, 14, Rgba.fromHex(0x00E5FF), 3.8f)
+        spawnBurst(px, py + 0.9f, pz, 12, Rgba.fromHex(0xFFD22B), 3.4f)
+    }
+
+    /**
+     * Individual non-blocking respawn for ONLY the specified rival (`r`).
+     * Never affects the human player or any other rival!
+     */
+    private fun triggerIndividualRespawnForRival(r: RuntimeRival) {
+        val state = r.checkpointState
+        spawnBurst(r.x, r.y + 0.4f, r.z, 6, Rgba.fromHex(0x00E5FF), 2.5f)
+
+        r.x = state.safeRespawnX
+        r.y = state.safeRespawnY
+        r.z = state.safeRespawnZ
+        r.vx = 0f
+        r.vy = 0f
+        r.vz = 0f
+        r.yaw = state.safeRespawnYaw
+        r.grounded = false
+        r.hitStunTimer = 0f
+        r.squashY = 1.22f
+
+        state.currentX = r.x
+        state.currentY = r.y
+        state.currentZ = r.z
+        state.isRespawning = true
+        state.respawnTimerSec = 1.05f
+        state.fallAnimTimerSec = 0.25f
+        state.arrivalAnimTimerSec = 0.80f
+        state.portalScale = 1.0f
+        state.respawnCount++
+
+        spawnBurst(r.x, r.y + 0.5f, r.z, 8, Rgba.fromHex(0x00E5FF), 3.0f)
+        spawnBurst(r.x, r.y + 0.8f, r.z, 8, Rgba.fromHex(0xFFD22B), 2.8f)
     }
 
     fun respawnAtCheckpoint() {
@@ -341,16 +622,23 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             spawnX = currentLevel.startX
             spawnY = currentLevel.startY
             spawnZ = currentLevel.startZ
+            playerCheckpointState.safeRespawnX = spawnX
+            playerCheckpointState.safeRespawnY = spawnY + 0.6f
+            playerCheckpointState.safeRespawnZ = spawnZ
+            playerCheckpointState.safeRespawnYaw = 180f
         }
-        px = spawnX
-        py = spawnY + 0.6f
-        pz = spawnZ
+        px = playerCheckpointState.safeRespawnX
+        py = playerCheckpointState.safeRespawnY
+        pz = playerCheckpointState.safeRespawnZ
         vx = 0f; vy = 0f; vz = 0f
-        playerYaw = 180f
+        playerYaw = playerCheckpointState.safeRespawnYaw
         grounded = false
         diveTimer = 0f
         hitStunTimer = 0f
         cameraYawOffset = 0f
+        playerCheckpointState.currentX = px
+        playerCheckpointState.currentY = py
+        playerCheckpointState.currentZ = pz
         camX = px
         camY = py + 4.8f
         camZ = pz + 8.5f
@@ -509,6 +797,31 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             tierBannerTimer = (tierBannerTimer - dt).coerceAtLeast(0f)
             if (tierBannerTimer == 0f) tierBannerText = ""
         }
+        if (checkpointBannerTimer > 0f) {
+            checkpointBannerTimer = (checkpointBannerTimer - dt).coerceAtLeast(0f)
+            if (checkpointBannerTimer == 0f) checkpointBannerText = ""
+        }
+
+        // Decay checkpoint activation visual pulse timers
+        val pulseIter = checkpointPulseTimers.entries.iterator()
+        while (pulseIter.hasNext()) {
+            val entry = pulseIter.next()
+            val rem = entry.value - dt
+            if (rem <= 0f) pulseIter.remove() else entry.setValue(rem)
+        }
+
+        // Decay local player's portal respawn visual timer (non-blocking)
+        if (playerCheckpointState.isRespawning) {
+            playerCheckpointState.respawnTimerSec = (playerCheckpointState.respawnTimerSec - dt).coerceAtLeast(0f)
+            playerCheckpointState.fallAnimTimerSec = (playerCheckpointState.fallAnimTimerSec - dt).coerceAtLeast(0f)
+            playerCheckpointState.arrivalAnimTimerSec = (playerCheckpointState.arrivalAnimTimerSec - dt).coerceAtLeast(0f)
+            playerCheckpointState.portalScale = (playerCheckpointState.respawnTimerSec / 1.05f).coerceIn(0f, 1f)
+            if (playerCheckpointState.respawnTimerSec <= 0f) {
+                playerCheckpointState.isRespawning = false
+                playerCheckpointState.portalScale = 0f
+            }
+        }
+
         obstacleTime += dt * speedMultiplier
         platformTime += dt * (1.0f + (speedMultiplier - 1.0f) * 0.65f)
 
@@ -562,6 +875,9 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             animState = CharAnimState.VICTORY_DANCE
             playerYaw += dt * 70f
             squashY += (1f - squashY) * minOf(1f, dt * 10f)
+            if (currentMode == GameMode.RIVAL_RACE || rivals.isNotEmpty()) {
+                updateRivals(dt)
+            }
             updateFollowCamera(dt)
             return
         }
@@ -570,6 +886,9 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             animState = CharAnimState.DEFEAT
             vy -= 26f * dt
             py += vy * dt
+            if (currentMode == GameMode.RIVAL_RACE || rivals.isNotEmpty()) {
+                updateRivals(dt)
+            }
             updateFollowCamera(dt)
             return
         }
@@ -640,6 +959,11 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         py += vy * dt
         pz += vz * dt
 
+        // Guard against NaN/infinite physics anomalies
+        if (px.isNaN() || py.isNaN() || pz.isNaN() || !px.isFinite() || !py.isFinite() || !pz.isFinite()) {
+            triggerIndividualRespawnForPlayer()
+        }
+
         // Platform collision resolution (generous rounded-character cylinder/AABB + ledge step-up)
         val wasGrounded = grounded
         grounded = false
@@ -701,6 +1025,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                         PlatformType.FINISH -> {
                             if (!runFinished) {
                                 runFinished = true
+                                playerCheckpointState.finished = true
                                 playerFinishOrder = nextFinishOrder++
                                 val rank = if (currentMode == GameMode.RIVAL_RACE) playerFinishOrder else 1
                                 val totalR = if (currentMode == GameMode.RIVAL_RACE) rivals.size + 1 else 1
@@ -749,20 +1074,12 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         }
         obstaclesPassed = maxOf(obstaclesPassed, passedCount)
 
-        // Checkpoints
+        // Ordered Checkpoints Activation for Local Player ("player_0")
         for (i in 0 until activeCheckpoints.size) {
             val cp = activeCheckpoints[i]
-            if (cp.index > highestCheckpointIndex) {
-                val distSq = (px - cp.x) * (px - cp.x) + (pz - cp.z) * (pz - cp.z)
-                if (distSq < 9.5f && abs(py - cp.y) < 3.0f) {
-                    highestCheckpointIndex = cp.index
-                    spawnX = cp.x
-                    spawnY = cp.y + 0.5f
-                    spawnZ = cp.z
-                    listener?.onSfx("checkpoint")
-                    listener?.onHaptic(false)
-                    spawnBurst(cp.x, cp.y + 1.4f, cp.z, 14, Rgba.fromHex(0x2EE58D), 3.6f)
-                }
+            val distSq = (px - cp.x) * (px - cp.x) + (pz - cp.z) * (pz - cp.z)
+            if (distSq < 10.5f && abs(py - cp.y) < 3.2f) {
+                tryActivateCheckpointForPlayer(cp)
             }
         }
 
@@ -782,16 +1099,19 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             }
         }
 
-        // Distance tracking
+        // Distance & Race Progress tracking
         val distNow = (-pz).coerceAtLeast(0f)
         if (distNow > maxDistanceM) maxDistanceM = distNow
+        val totalCourseDist = (-currentLevel.finishZ).coerceAtLeast(10f)
+        playerCheckpointState.currentX = px
+        playerCheckpointState.currentY = py
+        playerCheckpointState.currentZ = pz
+        playerCheckpointState.raceProgress = ((-pz) / totalCourseDist).coerceIn(0f, 1f)
 
-        // Fall into void detection
-        if (py < prevFloorMinY && !runFailed && !runFinished) {
-            runFailed = true
-            listener?.onSfx("fail")
-            listener?.onHaptic(true)
-            listener?.onPlayerFell()
+        // Individual Fall & Out-of-Bounds Detection for Local Player ("player_0")
+        val outOfBounds = abs(px) > 45f || pz > currentLevel.startZ + 25f
+        if ((py < prevFloorMinY || outOfBounds) && !runFailed && !runFinished) {
+            triggerIndividualRespawnForPlayer()
         }
 
         // Running dust & equipped trail particles
@@ -813,6 +1133,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
 
         // Animation state selection
         animState = when {
+            playerCheckpointState.fallAnimTimerSec > 0f -> CharAnimState.FALL
             hitStunTimer > 0f -> CharAnimState.HIT
             diveTimer > 0f -> CharAnimState.DIVE
             !grounded && currentWorld.gravityMultiplier < 0.85f && vy < 0f -> CharAnimState.FLOAT
@@ -826,8 +1147,8 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             else -> CharAnimState.IDLE
         }
 
-        // Update AI Rivals when racing
-        if (currentMode == GameMode.RIVAL_RACE) {
+        // Update AI Rivals / Other Players independently
+        if (currentMode == GameMode.RIVAL_RACE || rivals.isNotEmpty()) {
             updateRivals(dt)
         }
 
@@ -836,9 +1157,23 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
 
     private fun updateRivals(dt: Float) {
         val gravity = 28.5f * currentWorld.gravityMultiplier
+        val totalCourseDist = (-currentLevel.finishZ).coerceAtLeast(10f)
         for (i in 0 until rivals.size) {
             val r = rivals[i]
+            val state = r.checkpointState
             r.animTime += dt
+
+            if (state.isRespawning) {
+                state.respawnTimerSec = (state.respawnTimerSec - dt).coerceAtLeast(0f)
+                state.fallAnimTimerSec = (state.fallAnimTimerSec - dt).coerceAtLeast(0f)
+                state.arrivalAnimTimerSec = (state.arrivalAnimTimerSec - dt).coerceAtLeast(0f)
+                state.portalScale = (state.respawnTimerSec / 1.05f).coerceIn(0f, 1f)
+                if (state.respawnTimerSec <= 0f) {
+                    state.isRespawning = false
+                    state.portalScale = 0f
+                }
+            }
+
             if (r.finished) {
                 r.animState = CharAnimState.VICTORY_DANCE
                 r.yaw += dt * 75f
@@ -936,6 +1271,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             r.y += r.vy * dt
             r.z += r.vz * dt
 
+            if (r.x.isNaN() || r.y.isNaN() || r.z.isNaN() || !r.x.isFinite() || !r.y.isFinite() || !r.z.isFinite()) {
+                triggerIndividualRespawnForRival(r)
+            }
+
             // Rival platform collision
             r.grounded = false
             for (rp in platforms) {
@@ -952,11 +1291,6 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                         r.x += (rp.curX - rp.prevX)
                         r.y += (rp.curY - rp.prevY)
                         r.z += (rp.curZ - rp.prevZ)
-                        if (rp.def.type != PlatformType.DISAPPEARING && rp.def.type != PlatformType.FALLING) {
-                            r.respawnX = rp.curX
-                            r.respawnY = topY + 0.6f
-                            r.respawnZ = rp.curZ
-                        }
                         when (rp.def.type) {
                             PlatformType.BOUNCE_PAD -> {
                                 r.vy = 16.2f
@@ -969,6 +1303,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                             }
                             PlatformType.FINISH -> {
                                 r.finished = true
+                                state.finished = true
                                 r.finishOrder = nextFinishOrder++
                                 r.finishTimeMs = (elapsedSec * 1000f).toLong()
                                 spawnBurst(r.x, r.y + 1.5f, r.z, 12, r.skin.hoodieColor, 4.0f)
@@ -977,6 +1312,15 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                         }
                         break
                     }
+                }
+            }
+
+            // Rival ordered checkpoint activation (independent per rival)
+            for (cIdx in 0 until activeCheckpoints.size) {
+                val cp = activeCheckpoints[cIdx]
+                val distSq = (r.x - cp.x) * (r.x - cp.x) + (r.z - cp.z) * (r.z - cp.z)
+                if (distSq < 11.5f && abs(r.y - cp.y) < 3.4f) {
+                    tryActivateCheckpointForRival(r, cp)
                 }
             }
 
@@ -1007,17 +1351,20 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                 }
             }
 
-            // Rival void respawn
-            if (r.y < prevFloorMinY) {
-                r.x = r.respawnX
-                r.y = r.respawnY + 0.5f
-                r.z = r.respawnZ
-                r.vx = 0f; r.vy = 0f; r.vz = 0f
-                r.hitStunTimer = 0f
+            state.currentX = r.x
+            state.currentY = r.y
+            state.currentZ = r.z
+            state.raceProgress = ((-r.z) / totalCourseDist).coerceIn(0f, 1f)
+
+            // Rival individual void/out-of-bounds respawn (ONLY respawns this specific rival)
+            val rivalOutOfBounds = abs(r.x) > 45f || r.z > currentLevel.startZ + 25f
+            if (r.y < prevFloorMinY || rivalOutOfBounds) {
+                triggerIndividualRespawnForRival(r)
             }
 
             val spd = sqrt(r.vx * r.vx + r.vz * r.vz)
             r.animState = when {
+                state.fallAnimTimerSec > 0f -> CharAnimState.FALL
                 r.hitStunTimer > 0f -> CharAnimState.HIT
                 !r.grounded && r.vy > 1.2f -> CharAnimState.JUMP
                 !r.grounded -> CharAnimState.FALL
@@ -1044,6 +1391,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             val res = LevelCatalog.generateEndlessSegment(endlessSegIndex++, survivalTier, endlessNextY, endlessNextZ, endlessRng)
             for (p in res.platforms) platforms += RuntimePlatform(p)
             activeObstacles.addAll(res.obstacles)
+            activeCheckpoints.addAll(res.checkpoints)
             for (c in res.coins) coins += RuntimeCoin(c)
             endlessNextY = res.nextY
             endlessNextZ = res.nextZ
@@ -1234,6 +1582,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         val tierDuration = if (currentMode == GameMode.ENDLESS) 14f else 18f
         val tierProg = ((elapsedSec % tierDuration) / tierDuration).coerceIn(0f, 1f)
         val prog = if (currentMode == GameMode.ENDLESS) tierProg else ((-pz) / totalDist).coerceIn(0f, 1f)
+        val totalCps = activeCheckpoints.size.coerceAtLeast(4)
         return HudSnapshot(
             levelNumber = currentLevel.number,
             levelTitle = currentLevel.title,
@@ -1246,6 +1595,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             obstaclesPassed = obstaclesPassed,
             dashCooldownFraction = (dashCooldown / 2.4f).coerceIn(0f, 1f),
             checkpointReached = highestCheckpointIndex,
+            totalCheckpoints = totalCps,
+            checkpointBannerText = checkpointBannerText,
+            isPlayerRespawning = playerCheckpointState.isRespawning,
+            respawnProgress = playerCheckpointState.portalScale,
             fps = fps,
             isVictory = runFinished,
             isFailed = runFailed,

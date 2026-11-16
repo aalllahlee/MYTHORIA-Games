@@ -1,5 +1,12 @@
 extends Node3D
 
+## MYTHORIA games — By ahmed
+## DON'T FALL 3D Gameplay Scene with 4 Ordered Mythoria Sanctuary Checkpoints
+## and Independent Multi-Racer Respawn System (1 Local Player + 4 AI Rivals).
+
+const CheckpointScene := preload("res://scenes/checkpoint_3d.tscn")
+const PlayerScript := preload("res://scripts/player_controller.gd")
+
 @onready var player: CharacterBody3D = $Player
 @onready var camera_rig: Node3D = $CameraRig
 @onready var camera_3d: Camera3D = $CameraRig/Camera3D
@@ -16,12 +23,19 @@ extends Node3D
 var level_number: int = 1
 var world_id: int = 1
 var finish_z: float = -75.0
+var void_floor_y: float = -7.5
 var elapsed_sec: float = 0.0
 var coins_collected: int = 0
 var run_active: bool = true
 var survival_tier: int = 1
 var speed_multiplier: float = 1.0
+var total_checkpoints: int = 4
+var checkpoint_banner_timer: float = 0.0
+var checkpoint_banner_text: String = ""
 var hammers: Array = []
+var moving_platforms: Array = []
+var checkpoints: Array = []
+var rivals: Array = []
 var coin_nodes: Array = []
 var joy_touch_id: int = -1
 var joy_center: Vector2 = Vector2(160.0, 560.0)
@@ -31,7 +45,13 @@ func _ready() -> void:
 	level_number = GameState.current_level_number
 	world_id = int((level_number - 1) / 5) + 1
 	result_panel.visible = false
+	player.player_id = "player_0"
+	player.is_ai_racer = false
+	player.initialize_spawn(Vector3(0.0, 1.8, 1.5), 180.0)
+	player.checkpoint_reached.connect(_on_racer_checkpoint_reached)
+	player.individual_respawn_started.connect(_on_racer_respawn_started)
 	build_3d_course()
+	spawn_ai_rivals()
 
 func build_3d_course() -> void:
 	var w_theme: Dictionary = GameState.get_world_theme(world_id)
@@ -39,7 +59,7 @@ func build_3d_course() -> void:
 	var sec_col: Color = w_theme["secondary"]
 	var acc_col: Color = w_theme["accent"]
 
-	# Start Island with Twin Golden Fire Braziers
+	# Start Island with Twin Golden Fire Braziers (Checkpoint 0 / Start Sanctuary)
 	spawn_platform(Vector3(0.0, 0.0, 0.0), Vector3(8.0, 1.4, 8.0), prim_col)
 	spawn_platform(Vector3(-3.2, 1.1, -2.5), Vector3(0.8, 0.9, 0.8), Color(1.0, 0.82, 0.18))
 	spawn_platform(Vector3(3.2, 1.1, -2.5), Vector3(0.8, 0.9, 0.8), Color(1.0, 0.82, 0.18))
@@ -47,22 +67,93 @@ func build_3d_course() -> void:
 	var stage_in_world: int = ((level_number - 1) % 5) + 1
 	var seg_count: int = 5 + stage_in_world + int(world_id / 3)
 	var cur_z: float = -7.5
+	var cp_spawned: int = 0
 
+	# Course layout: START -> CHECKPOINT 1 -> CHECKPOINT 2 -> CHECKPOINT 3 -> CHECKPOINT 4 -> FINAL PLATFORM -> FINISH LINE
 	for seg in range(seg_count):
 		var col: Color = prim_col if (seg % 2 == 0) else sec_col
-		spawn_platform(Vector3(0.0, 0.0, cur_z - 4.5), Vector3(7.0, 1.2, 9.0), col)
+		if seg % 3 == 1:
+			spawn_moving_platform(Vector3(0.0, 0.0, cur_z - 4.5), Vector3(6.2, 1.2, 8.5), sec_col, 2.4, 1.25 + float(seg) * 0.1)
+		else:
+			spawn_platform(Vector3(0.0, 0.0, cur_z - 4.5), Vector3(7.0, 1.2, 9.0), col)
 		spawn_coin(Vector3(0.0, 1.5, cur_z - 4.5))
 		if seg % 2 == 1:
 			spawn_rotating_hammer(Vector3(0.0, 1.2, cur_z - 4.5), acc_col, 1.8 + float(level_number) * 0.04)
 		cur_z -= 11.2
 
+		var target_cp: int = int(((seg + 1) * 4) / seg_count)
+		var prev_cp: int = int((seg * 4) / seg_count)
+		if target_cp > prev_cp and cp_spawned < 4:
+			cp_spawned += 1
+			var cp_platform_pos := Vector3(0.0, 0.0, cur_z - 3.5)
+			spawn_platform(cp_platform_pos, Vector3(7.6, 1.35, 6.8), acc_col)
+			spawn_checkpoint_gate(Vector3(0.0, 0.68, cur_z - 3.5), cp_spawned)
+			spawn_coin(Vector3(-2.1, 1.55, cur_z - 3.5))
+			spawn_coin(Vector3(2.1, 1.55, cur_z - 3.5))
+			cur_z -= 8.5
+
+	total_checkpoints = max(1, cp_spawned)
 	finish_z = cur_z - 4.5
 	spawn_platform(Vector3(0.0, 0.0, finish_z), Vector3(10.0, 1.5, 9.0), acc_col)
 	spawn_finish_arch(Vector3(0.0, 0.75, finish_z), acc_col)
 
 	var goal_sec: int = int(GameState.goal_time_ms_for_level(level_number) / 1000)
-	hud_level_label.text = "W%d STAGE %d" % [world_id, level_number]
+	hud_level_label.text = "W%d STAGE %d  |  CHECKPOINT 0/%d" % [world_id, level_number, total_checkpoints]
 	hud_goal_banner.text = "PROGRESSION GOAL: Reach Finish within <= %ds to unlock next stage/world!" % goal_sec
+
+func spawn_checkpoint_gate(pos: Vector3, cp_index: int) -> void:
+	var cp_node: Area3D = CheckpointScene.instantiate()
+	cp_node.position = pos
+	cp_node.set("checkpoint_index", cp_index)
+	cp_node.set("safe_yaw_deg", 180.0)
+	track_root.add_child(cp_node)
+	checkpoints.append(cp_node)
+
+func spawn_ai_rivals() -> void:
+	var offsets := [-2.4, -0.9, 0.9, 2.4]
+	var speeds := [8.25, 7.85, 7.50, 7.15]
+	var colors := [
+		Color(1.0, 0.72, 0.08),
+		Color(0.12, 0.48, 0.98),
+		Color(0.0, 0.78, 0.92),
+		Color(0.62, 0.22, 0.92)
+	]
+	for i in range(4):
+		var rival := CharacterBody3D.new()
+		rival.set_script(PlayerScript)
+		rival.name = "Rival_%d" % (i + 1)
+		rival.player_id = "rival_%d" % (i + 1)
+		rival.is_ai_racer = true
+		rival.move_speed = speeds[i]
+		rival.lane_bias_x = offsets[i] * 0.6
+
+		var col := CollisionShape3D.new()
+		var cap := CapsuleShape3D.new()
+		cap.radius = 0.36
+		cap.height = 1.3
+		col.shape = cap
+		col.position = Vector3(0.0, 0.65, 0.0)
+		rival.add_child(col)
+
+		var vis := Node3D.new()
+		vis.name = "VisualRoot"
+		var body_mesh := MeshInstance3D.new()
+		var cap_mesh := CapsuleMesh.new()
+		cap_mesh.radius = 0.36
+		cap_mesh.height = 1.25
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = colors[i]
+		mat.roughness = 0.35
+		cap_mesh.material = mat
+		body_mesh.mesh = cap_mesh
+		body_mesh.position = Vector3(0.0, 0.65, 0.0)
+		vis.add_child(body_mesh)
+		rival.add_child(vis)
+
+		var start_pos := Vector3(offsets[i], 1.8, 1.5 + float(i % 2) * 0.5)
+		add_child(rival)
+		rival.initialize_spawn(start_pos, 180.0)
+		rivals.append(rival)
 
 func spawn_platform(pos: Vector3, sz: Vector3, col: Color) -> void:
 	var body := StaticBody3D.new()
@@ -83,6 +174,27 @@ func spawn_platform(pos: Vector3, sz: Vector3, col: Color) -> void:
 	mesh_inst.mesh = mesh
 	body.add_child(mesh_inst)
 	track_root.add_child(body)
+
+func spawn_moving_platform(pos: Vector3, sz: Vector3, col: Color, amp_x: float, spd: float) -> void:
+	var body := AnimatableBody3D.new()
+	body.position = pos
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = sz
+	shape.shape = box
+	body.add_child(shape)
+
+	var mesh_inst := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = sz
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.roughness = 0.42
+	mesh.material = mat
+	mesh_inst.mesh = mesh
+	body.add_child(mesh_inst)
+	track_root.add_child(body)
+	moving_platforms.append({"node": body, "base_x": pos.x, "amp_x": amp_x, "speed": spd})
 
 func spawn_rotating_hammer(pos: Vector3, col: Color, spd: float) -> void:
 	var pivot := Node3D.new()
@@ -128,7 +240,6 @@ func spawn_finish_arch(pos: Vector3, col: Color) -> void:
 		pillar.position = pos + Vector3(side, 2.4, 0.0)
 		track_root.add_child(pillar)
 
-	# Top Golden Temple Architrave & Glowing Blue Sapphire Portal Core
 	var beam := MeshInstance3D.new()
 	var b_mesh := BoxMesh.new()
 	b_mesh.size = Vector3(8.2, 0.85, 0.85)
@@ -151,6 +262,20 @@ func spawn_finish_arch(pos: Vector3, col: Color) -> void:
 	portal.mesh = port_mesh
 	portal.position = pos + Vector3(0.0, 2.3, 0.0)
 	track_root.add_child(portal)
+
+func _on_racer_checkpoint_reached(pid: String, cp_index: int) -> void:
+	if pid == "player_0":
+		checkpoint_banner_timer = 2.4
+		checkpoint_banner_text = "CHECKPOINT %d / %d ACTIVATED!" % [cp_index, total_checkpoints]
+		hud_level_label.text = "W%d STAGE %d  |  CHECKPOINT %d/%d" % [world_id, level_number, cp_index, total_checkpoints]
+
+func _on_racer_respawn_started(pid: String, cp_index: int, _respawn_pos: Vector3) -> void:
+	if pid == "player_0":
+		checkpoint_banner_timer = 1.6
+		if cp_index > 0:
+			checkpoint_banner_text = "RESPAWNED AT CHECKPOINT %d" % cp_index
+		else:
+			checkpoint_banner_text = "RESPAWNED AT START SANCTUARY"
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
@@ -175,13 +300,28 @@ func _process(delta: float) -> void:
 	survival_tier = 1 + int(elapsed_sec / 18.0)
 	speed_multiplier = clampf(1.0 + elapsed_sec * 0.015 + float(survival_tier - 1) * 0.08, 1.0, 2.2)
 
-	# Rotate obstacle hammers and check knockback
+	if checkpoint_banner_timer > 0.0:
+		checkpoint_banner_timer = maxf(0.0, checkpoint_banner_timer - delta)
+
+	# Update moving platforms continuously (never interrupted when any player respawns)
+	for mp in moving_platforms:
+		var body: AnimatableBody3D = mp["node"]
+		body.position.x = float(mp["base_x"]) + sin(elapsed_sec * float(mp["speed"])) * float(mp["amp_x"])
+
+	# Rotate obstacle hammers and check knockback for all racers
 	for h in hammers:
 		var node: Node3D = h["node"]
 		node.rotation.y += float(h["speed"]) * speed_multiplier * delta
 		if player.global_position.distance_to(node.global_position) < 2.2 and absf(player.global_position.y - node.global_position.y) < 1.1:
 			player.velocity.z = 7.5
 			player.velocity.y = 5.5
+		for r in rivals:
+			if r.global_position.distance_to(node.global_position) < 2.2 and absf(r.global_position.y - node.global_position.y) < 1.1:
+				r.velocity.z = 7.2
+				r.velocity.y = 5.2
+
+	# Update AI Rivals independently
+	_update_ai_rivals(delta)
 
 	# Collect coins
 	for c in coin_nodes:
@@ -197,24 +337,55 @@ func _process(delta: float) -> void:
 	camera_rig.global_position = camera_rig.global_position.lerp(target_cam_pos, delta * 8.0)
 	camera_3d.look_at(player.global_position + Vector3(0.0, 1.1, -1.5), Vector3.UP)
 
-	# Update HUD timer & goal pace
+	# Update HUD timer, checkpoint badge & goal pace
 	var elapsed_ms: int = int(elapsed_sec * 1000.0)
 	var goal_ms: int = GameState.goal_time_ms_for_level(level_number)
+	hud_level_label.text = "W%d STAGE %d  |  CHECKPOINT %d/%d" % [world_id, level_number, player.last_activated_checkpoint, total_checkpoints]
 	hud_timer_label.text = "%02d.%02ds / Goal <= %ds" % [int(elapsed_sec), int(fmod(elapsed_sec * 100.0, 100.0)), int(goal_ms / 1000)]
 	hud_timer_label.modulate = Color(0.25, 0.95, 0.62) if elapsed_ms <= goal_ms else Color(1.0, 0.35, 0.45)
 	hud_coins_label.text = "COINS: %d  |  SPEED: %.2fx" % [coins_collected, speed_multiplier]
 
-	# Check fall into void
-	if player.global_position.y < -7.5:
-		AudioSynth.play_sfx("fail")
+	if checkpoint_banner_timer > 0.0:
+		hud_goal_banner.text = checkpoint_banner_text
+		hud_goal_banner.modulate = Color(0.0, 0.90, 1.0)
+	else:
+		var goal_sec: int = int(goal_ms / 1000)
+		hud_goal_banner.text = "PROGRESSION GOAL: Reach Finish within <= %ds to unlock next stage/world!" % goal_sec
+		hud_goal_banner.modulate = Color(1.0, 0.84, 0.18)
+
+	# Individual Fall Detection for Local Player ("player_0"):
+	# Respawns ONLY player_0 at their latest activated checkpoint without interrupting rivals or timers!
+	if player.global_position.y < void_floor_y or absf(player.global_position.x) > 45.0:
 		player.respawn_at_checkpoint()
 
 	# Check finish arch
 	if player.global_position.z <= finish_z + 2.2:
 		complete_level(elapsed_ms)
 
+func _update_ai_rivals(delta: float) -> void:
+	for r in rivals:
+		if r.finished:
+			continue
+		var target_x: float = r.lane_bias_x * sin(elapsed_sec * 0.9 + float(r.get_index()))
+		var dx: float = target_x - r.global_position.x
+		r.velocity.x = move_toward(r.velocity.x, clampf(dx * 3.5, -4.0, 4.0), 18.0 * delta)
+		r.velocity.z = move_toward(r.velocity.z, -r.move_speed, 18.0 * delta)
+
+		if r.is_on_floor() and fmod(elapsed_sec + float(r.get_index()) * 0.47, 1.8) < 0.08:
+			r.request_jump()
+
+		# Individual Fall Detection for this specific AI Rival:
+		# Respawns ONLY this rival at their own latest activated checkpoint!
+		if r.global_position.y < void_floor_y or absf(r.global_position.x) > 45.0:
+			r.respawn_at_checkpoint()
+
+		if r.global_position.z <= finish_z + 2.2:
+			r.finished = true
+			r.velocity = Vector3.ZERO
+
 func complete_level(elapsed_ms: int) -> void:
 	run_active = false
+	player.finished = true
 	AudioSynth.play_sfx("victory")
 	var outcome: Dictionary = GameState.record_level_win(level_number, elapsed_ms, coins_collected, 1)
 	can_advance_next = bool(outcome["can_advance"])

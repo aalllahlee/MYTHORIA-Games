@@ -121,7 +121,29 @@ data class CheckpointDef(
     val x: Float,
     val y: Float,
     val z: Float,
-    val index: Int
+    val index: Int,
+    val safeYaw: Float = 180f
+)
+
+data class PlayerCheckpointState(
+    val playerId: String,
+    var currentX: Float = 0f,
+    var currentY: Float = 1.6f,
+    var currentZ: Float = 1.5f,
+    var lastActivatedCheckpoint: Int = 0,
+    val activatedCheckpoints: MutableSet<Int> = mutableSetOf(0),
+    var safeRespawnX: Float = 0f,
+    var safeRespawnY: Float = 1.6f,
+    var safeRespawnZ: Float = 1.5f,
+    var safeRespawnYaw: Float = 180f,
+    var isRespawning: Boolean = false,
+    var respawnTimerSec: Float = 0f,
+    var fallAnimTimerSec: Float = 0f,
+    var arrivalAnimTimerSec: Float = 0f,
+    var portalScale: Float = 0f,
+    var raceProgress: Float = 0f,
+    var finished: Boolean = false,
+    var respawnCount: Int = 0
 )
 
 data class CoinDef(

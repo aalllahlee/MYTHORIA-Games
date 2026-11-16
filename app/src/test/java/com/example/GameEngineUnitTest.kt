@@ -167,4 +167,222 @@ class GameEngineUnitTest {
         assertTrue(graph.isGoalMet(5, l5GoalMs - 500L, completed = true))
         assertFalse(graph.isGoalMet(5, l5GoalMs - 500L, completed = false))
     }
+
+    @Test
+    fun test1_playerReachesCheckpoint2AndFalls_respawnsAtCheckpoint2() {
+        val world = GamePhysicsWorld()
+        val level = LevelCatalog.getLevel(1)
+        assertEquals("Every level must have 4 ordered checkpoints", 4, level.checkpoints.size)
+        world.loadLevel(level, GameMode.CAREER)
+        world.step(0.016f)
+
+        // Player A activates Checkpoint 1 then Checkpoint 2 in order
+        assertTrue(world.activateCheckpointForRacer("player_0", 1))
+        assertTrue(world.activateCheckpointForRacer("player_0", 2))
+        assertEquals(2, world.playerCheckpointState.lastActivatedCheckpoint)
+
+        val cp2 = level.checkpoints[1]
+        // Player A falls off the map beyond Checkpoint 2
+        world.px = 5.0f
+        world.py = -30.0f
+        world.pz = cp2.z - 12.0f
+        world.step(0.016f)
+
+        assertEquals("Player A must retain Checkpoint 2", 2, world.playerCheckpointState.lastActivatedCheckpoint)
+        assertEquals("Player A must respawn at Checkpoint 2 Z", cp2.z, world.pz, 0.05f)
+        assertTrue("Player A must respawn safely above Checkpoint 2 platform", world.py > cp2.y)
+        assertFalse("Match must NOT fail or reset", world.runFailed)
+    }
+
+    @Test
+    fun test2_fivePlayersRacing_playerAFalls_onlyPlayerARespawnsOthersContinueUninterrupted() {
+        val world = GamePhysicsWorld()
+        val level = LevelCatalog.getLevel(2)
+        world.loadLevel(level, GameMode.RIVAL_RACE)
+        world.step(0.016f)
+        assertEquals("5 racers total (1 human + 4 AI rivals)", 4, world.rivals.size)
+
+        // Advance all 5 players along the track
+        for (i in 0 until 20) {
+            world.step(0.02f)
+        }
+        world.activateCheckpointForRacer("player_0", 1)
+
+        // Record the 4 other players' positions and respawn counts right before Player A falls
+        val rivalPositionsBefore = world.rivals.map { Triple(it.x, it.y, it.z) }
+        val rivalRespawnCountsBefore = world.rivals.map { it.checkpointState.respawnCount }
+        val timerBefore = world.elapsedSec
+
+        // Player A falls off the map
+        world.py = -30f
+        world.step(0.02f)
+
+        // Verify ONLY Player A respawned
+        assertEquals(1, world.playerCheckpointState.respawnCount)
+        assertTrue(world.playerCheckpointState.isRespawning)
+        assertTrue("Global race timer must continue uninterrupted", world.elapsedSec > timerBefore)
+
+        // Verify none of the other 4 players were reset or teleported back to start
+        for (i in 0 until 4) {
+            val r = world.rivals[i]
+            assertEquals("Rival ${r.id} must NOT have respawned", rivalRespawnCountsBefore[i], r.checkpointState.respawnCount)
+            assertFalse("Rival ${r.id} must NOT be marked respawning", r.checkpointState.isRespawning)
+            assertTrue("Rival ${r.id} must continue advancing forward along -Z", r.z <= rivalPositionsBefore[i].third + 0.01f)
+        }
+    }
+
+    @Test
+    fun test3_playerAHasCheckpoint3AndPlayerBHasCheckpoint1_playerAFalls_independentRespawnAndPreservation() {
+        val world = GamePhysicsWorld()
+        val level = LevelCatalog.getLevel(3)
+        world.loadLevel(level, GameMode.RIVAL_RACE)
+        world.step(0.016f)
+
+        // Player A ("player_0") activates Checkpoints 1, 2, 3
+        assertTrue(world.activateCheckpointForRacer("player_0", 1))
+        assertTrue(world.activateCheckpointForRacer("player_0", 2))
+        assertTrue(world.activateCheckpointForRacer("player_0", 3))
+
+        // Player B ("rival_1") activates Checkpoint 1 and is currently running between CP 1 and CP 2
+        assertTrue(world.activateCheckpointForRacer("rival_1", 1))
+        val rivalB = world.rivals[0]
+        rivalB.x = -1.2f
+        rivalB.y = 2.0f
+        rivalB.z = -38.0f
+        rivalB.vx = 0f
+        rivalB.vy = 0f
+        rivalB.vz = -7.5f
+
+        val cp3 = level.checkpoints[2]
+
+        // Player A falls off the map
+        world.py = -30.0f
+        world.step(0.016f)
+
+        // Player A returns to Checkpoint 3
+        assertEquals(3, world.playerCheckpointState.lastActivatedCheckpoint)
+        assertEquals(cp3.z, world.pz, 0.05f)
+
+        // Player B remains at their position (continuing forward) and keeps Checkpoint 1
+        assertEquals(1, rivalB.checkpointState.lastActivatedCheckpoint)
+        assertEquals(0, rivalB.checkpointState.respawnCount)
+        assertTrue("Player B must remain near their running Z (-38) and not teleport to CP 1 or CP 3", rivalB.z < -37.5f && rivalB.z > -40.0f)
+    }
+
+    @Test
+    fun test4_twoPlayersFallAtSameTime_bothRespawnIndependentlyAtOwnCheckpoints() {
+        val world = GamePhysicsWorld()
+        val level = LevelCatalog.getLevel(4)
+        world.loadLevel(level, GameMode.RIVAL_RACE)
+        world.step(0.016f)
+
+        // Player A reaches Checkpoint 3; Player B ("rival_1") reaches Checkpoint 2; Player C ("rival_2") is at Checkpoint 1
+        world.activateCheckpointForRacer("player_0", 1)
+        world.activateCheckpointForRacer("player_0", 2)
+        world.activateCheckpointForRacer("player_0", 3)
+
+        world.activateCheckpointForRacer("rival_1", 1)
+        world.activateCheckpointForRacer("rival_1", 2)
+
+        world.activateCheckpointForRacer("rival_2", 1)
+
+        val cp3 = level.checkpoints[2]
+        val cp2 = level.checkpoints[1]
+        val rivalB = world.rivals[0]
+        val rivalC = world.rivals[1]
+
+        // Both Player A and Player B fall at the exact same frame
+        world.py = -35.0f
+        rivalB.y = -35.0f
+        world.step(0.016f)
+
+        assertEquals("Player A must respawn at Checkpoint 3", cp3.z, world.pz, 0.05f)
+        assertEquals("Player B must respawn at Checkpoint 2", cp2.z, rivalB.z, 0.05f)
+        assertEquals("Player A respawn count must be 1", 1, world.playerCheckpointState.respawnCount)
+        assertEquals("Player B respawn count must be 1", 1, rivalB.checkpointState.respawnCount)
+        assertEquals("Player C must NOT have respawned", 0, rivalC.checkpointState.respawnCount)
+    }
+
+    @Test
+    fun test5_playerFallsBeforeActivatingAnyCheckpoint_returnsToStartingPosition() {
+        val world = GamePhysicsWorld()
+        val level = LevelCatalog.getLevel(5)
+        world.loadLevel(level, GameMode.CAREER)
+        world.step(0.016f)
+
+        assertEquals(0, world.playerCheckpointState.lastActivatedCheckpoint)
+        world.px = 3.5f
+        world.pz = -6.0f
+        world.py = -30.0f
+        world.step(0.016f)
+
+        assertEquals(0, world.playerCheckpointState.lastActivatedCheckpoint)
+        assertEquals("Must return to Start X", level.startX, world.px, 0.05f)
+        assertEquals("Must return to Start Z", level.startZ, world.pz, 0.05f)
+        assertTrue("Must return safely above Start platform", world.py > level.startY)
+    }
+
+    @Test
+    fun test6_playerActivatesCheckpoints1To4InOrderAndFalls_returnsToCheckpoint4NotCheckpoint1() {
+        val world = GamePhysicsWorld()
+        val level = LevelCatalog.getLevel(6)
+        world.loadLevel(level, GameMode.CAREER)
+        world.step(0.016f)
+
+        // Cannot skip Checkpoint 1 to activate Checkpoint 3 directly
+        assertFalse("Cannot skip unreached checkpoints", world.activateCheckpointForRacer("player_0", 3))
+
+        // Activate Checkpoints 1, 2, 3, 4 in order
+        assertTrue(world.activateCheckpointForRacer("player_0", 1))
+        assertTrue(world.activateCheckpointForRacer("player_0", 2))
+        assertTrue(world.activateCheckpointForRacer("player_0", 3))
+        assertTrue(world.activateCheckpointForRacer("player_0", 4))
+
+        // Moving backward to touch Checkpoint 1 again must NEVER overwrite Checkpoint 4
+        assertFalse("Backward touch must not regress checkpoint progress", world.activateCheckpointForRacer("player_0", 1))
+        assertEquals(4, world.playerCheckpointState.lastActivatedCheckpoint)
+
+        val cp4 = level.checkpoints[3]
+        val cp1 = level.checkpoints[0]
+
+        // Player falls off the map
+        world.py = -30.0f
+        world.step(0.016f)
+
+        assertEquals("Player must respawn at Checkpoint 4 Z", cp4.z, world.pz, 0.05f)
+        assertTrue("Player must NOT respawn at Checkpoint 1 Z", kotlin.math.abs(world.pz - cp1.z) > 5.0f)
+    }
+
+    @Test
+    fun test7_playerRespawnsWhileOthersStandOnMovingPlatforms_movingPlatformsAndOthersContinueNormally() {
+        val world = GamePhysicsWorld()
+        val level = LevelCatalog.getLevel(2) // Level 2 has moving platforms
+        world.loadLevel(level, GameMode.RIVAL_RACE)
+        world.step(0.016f)
+
+        val movingPlat = world.platforms.first { it.def.type == com.example.game.model.PlatformType.MOVING }
+        val rivalOnPlat = world.rivals[0]
+
+        // Place rival B squarely on top of the moving platform
+        world.step(0.02f)
+        val platTopY = movingPlat.curY + movingPlat.def.h * 0.5f
+        rivalOnPlat.x = movingPlat.curX
+        rivalOnPlat.y = platTopY
+        rivalOnPlat.z = movingPlat.curZ
+        rivalOnPlat.vy = 0f
+        rivalOnPlat.grounded = true
+
+        val platTimeBefore = world.platformTime
+        val platXBefore = movingPlat.curX
+
+        // Player A falls and respawns while Rival B is on the moving platform
+        world.py = -30.0f
+        world.step(0.03f)
+
+        assertEquals(1, world.playerCheckpointState.respawnCount)
+        assertTrue("Platform clock must advance monotonically during player respawn", world.platformTime > platTimeBefore)
+        assertTrue("Moving platform must continue moving without reset", movingPlat.curX != platXBefore)
+        assertEquals("Rival on moving platform must NOT respawn", 0, rivalOnPlat.checkpointState.respawnCount)
+        assertTrue("Rival on moving platform must remain above platform height", rivalOnPlat.y >= movingPlat.curY)
+    }
 }

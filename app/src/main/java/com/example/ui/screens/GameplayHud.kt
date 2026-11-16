@@ -175,6 +175,38 @@ fun GameplayHud(
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = SurfaceCardDark,
+                    modifier = Modifier
+                        .border(1.5.dp, if (hud.checkpointReached > 0) SkyCyan else ChampionGold.copy(alpha = 0.75f), RoundedCornerShape(50))
+                        .testTag("hud_checkpoint_badge")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.Flag,
+                            contentDescription = null,
+                            tint = if (hud.checkpointReached > 0) SkyCyan else ChampionGold,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        val cpText = if (hud.mode == GameMode.ENDLESS) {
+                            "CHECKPOINT ${hud.checkpointReached}"
+                        } else {
+                            "CHECKPOINT ${hud.checkpointReached} / ${hud.totalCheckpoints}"
+                        }
+                        Text(
+                            text = cpText,
+                            fontFamily = FredokaFontFamily,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (hud.checkpointReached > 0) SkyCyan else ChampionGold
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = SurfaceCardDark,
                     modifier = Modifier.border(1.5.dp, ChampionGold, RoundedCornerShape(50))
                 ) {
                     Row(
@@ -241,8 +273,37 @@ fun GameplayHud(
             }
         }
 
-        // Level Start Banner OR Survival Tier-Up Banner
-        if (hud.tierBannerText.isNotEmpty() && !hud.isVictory && !hud.isFailed) {
+        // MYTHORIA Checkpoint Activated / Portal Respawn Banner OR Survival Tier-Up Banner OR Level Start Banner
+        if (hud.checkpointBannerText.isNotEmpty() && !hud.isVictory && !hud.isFailed) {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = Color(0xEE0A183D),
+                shadowElevation = 10.dp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .safeDrawingPadding()
+                    .padding(top = 74.dp)
+                    .border(2.dp, SkyCyan, RoundedCornerShape(22.dp))
+                    .testTag("checkpoint_activated_banner")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = ChampionGold, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = hud.checkpointBannerText,
+                        fontFamily = FredokaFontFamily,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ChampionGold
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Flag, contentDescription = null, tint = SkyCyan, modifier = Modifier.size(18.dp))
+                }
+            }
+        } else if (hud.tierBannerText.isNotEmpty() && !hud.isVictory && !hud.isFailed) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = Color(0xE8132D6A),

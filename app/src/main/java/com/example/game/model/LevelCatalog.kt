@@ -100,19 +100,10 @@ object LevelCatalog {
         var curX = 0f
         var curY = 0f
         var curZ = -6.5f
-        var cpIndex = 1
 
         for (seg in 0 until segmentCount) {
-            val isCheckpointSeg = seg > 0 && seg % 3 == 0 && seg < segmentCount - 1
-            if (isCheckpointSeg) {
-                platforms += PlatformDef(curX, curY, curZ - 3.0f, 7.0f, 1.3f, 6.5f, PlatformType.NORMAL, world.platformAccent)
-                checkpoints += CheckpointDef(curX, curY + 0.65f, curZ - 3.0f, cpIndex++)
-                coins += CoinDef(curX - 2f, curY + 1.5f, curZ - 3.0f)
-                coins += CoinDef(curX + 2f, curY + 1.5f, curZ - 3.0f)
-                curZ -= 8.0f
-                continue
-            }
-
+            // Insert 4 ordered MYTHORIA Sanctuary Checkpoints evenly across the course:
+            // START -> CHECKPOINT 1 -> CHECKPOINT 2 -> CHECKPOINT 3 -> CHECKPOINT 4 -> FINAL PLATFORM -> FINISH LINE
             val pattern = pickPatternForLevel(levelNum, stageInWorld, seg, rng)
             when (pattern) {
                 0 -> { // Stepping stones + gentle coins
@@ -224,6 +215,18 @@ object LevelCatalog {
                     curZ -= (deckLen + 2.2f)
                 }
             }
+
+            // Place 4 ordered safe Sanctuary Checkpoints across the segments
+            val targetCp = ((seg + 1) * 4) / segmentCount
+            val prevCp = (seg * 4) / segmentCount
+            if (targetCp > prevCp && checkpoints.size < 4) {
+                val cpNum = checkpoints.size + 1
+                platforms += PlatformDef(curX, curY, curZ - 3.2f, 7.6f, 1.35f, 6.8f, PlatformType.NORMAL, world.platformAccent)
+                checkpoints += CheckpointDef(curX, curY + 0.68f, curZ - 3.2f, cpNum, safeYaw = 180f)
+                coins += CoinDef(curX - 2.2f, curY + 1.5f, curZ - 3.2f)
+                coins += CoinDef(curX + 2.2f, curY + 1.5f, curZ - 3.2f)
+                curZ -= 8.2f
+            }
         }
 
         // Finish Island & Arch
@@ -290,12 +293,6 @@ object LevelCatalog {
         var curY = 0f
         var curZ = -6.5f
         for (seg in 0 until 8) {
-            if (seg == 4) {
-                platforms += PlatformDef(0f, curY, curZ - 3f, 7f, 1.2f, 6f, PlatformType.NORMAL, world.platformAccent)
-                checkpoints += CheckpointDef(0f, curY + 0.6f, curZ - 3f, 1)
-                curZ -= 7.8f
-                continue
-            }
             val p = rng.nextInt(7)
             when (p) {
                 0 -> {
@@ -336,6 +333,12 @@ object LevelCatalog {
                     curZ -= 9f
                 }
             }
+            if (seg % 2 == 1 && checkpoints.size < 4) {
+                val cpNum = checkpoints.size + 1
+                platforms += PlatformDef(0f, curY, curZ - 3f, 7.4f, 1.3f, 6.5f, PlatformType.NORMAL, world.platformAccent)
+                checkpoints += CheckpointDef(0f, curY + 0.65f, curZ - 3f, cpNum, safeYaw = 180f)
+                curZ -= 7.8f
+            }
         }
         val finishZ = curZ - 5f
         platforms += PlatformDef(0f, curY, finishZ, 11f, 1.6f, 10f, PlatformType.FINISH, world.platformAccent)
@@ -358,6 +361,7 @@ object LevelCatalog {
         val platforms: List<PlatformDef>,
         val obstacles: List<ObstacleDef>,
         val coins: List<CoinDef>,
+        val checkpoints: List<CheckpointDef> = emptyList(),
         val nextY: Float,
         val nextZ: Float
     )
@@ -372,6 +376,7 @@ object LevelCatalog {
         val platforms = mutableListOf<PlatformDef>()
         val obstacles = mutableListOf<ObstacleDef>()
         val coins = mutableListOf<CoinDef>()
+        val checkpoints = mutableListOf<CheckpointDef>()
         val wTheme = GameCatalog.worlds[(tier - 1 + segIndex / 3) % GameCatalog.worlds.size]
         val localSpeed = 1.0f + (tier - 1) * 0.14f
         var curY = startY
@@ -495,7 +500,16 @@ object LevelCatalog {
                 curZ -= (len + 2.4f)
             }
         }
-        return EndlessSegmentResult(platforms, obstacles, coins, curY, curZ)
+        // Periodic safe Sanctuary Checkpoint every 3 segments in Endless Mode
+        if ((segIndex + 1) % 3 == 0) {
+            val cpNum = (segIndex + 1) / 3
+            platforms += PlatformDef(0f, curY, curZ - 3.2f, 7.6f, 1.35f, 6.8f, PlatformType.NORMAL, wTheme.platformAccent)
+            checkpoints += CheckpointDef(0f, curY + 0.68f, curZ - 3.2f, cpNum, safeYaw = 180f)
+            coins += CoinDef(-2.0f, curY + 1.5f, curZ - 3.2f)
+            coins += CoinDef(2.0f, curY + 1.5f, curZ - 3.2f)
+            curZ -= 8.2f
+        }
+        return EndlessSegmentResult(platforms, obstacles, coins, checkpoints, curY, curZ)
     }
 
     fun generateEndlessLevel(seed: Long): LevelDef {
@@ -504,6 +518,7 @@ object LevelCatalog {
         val platforms = mutableListOf<PlatformDef>()
         val obstacles = mutableListOf<ObstacleDef>()
         val coins = mutableListOf<CoinDef>()
+        val checkpoints = mutableListOf<CheckpointDef>()
 
         platforms += PlatformDef(0f, 0f, 0f, 8f, 1.4f, 8f, PlatformType.NORMAL, world.platformPrimary)
         var curY = 0f
@@ -514,6 +529,7 @@ object LevelCatalog {
             platforms += res.platforms
             obstacles += res.obstacles
             coins += res.coins
+            checkpoints += res.checkpoints
             curY = res.nextY
             curZ = res.nextZ
         }
@@ -526,7 +542,7 @@ object LevelCatalog {
             rewardCoins = 250,
             platforms = platforms,
             obstacles = obstacles,
-            checkpoints = emptyList(),
+            checkpoints = checkpoints,
             coins = coins,
             finishZ = curZ
         )
@@ -547,7 +563,12 @@ object LevelCatalog {
             ObstacleDef(0f, 0.6f, -21f, ObstacleType.ROTATING_HAMMER, 1.0f, 1.3f, 2.8f, 0f),
             ObstacleDef(0f, 2.8f, -41f, ObstacleType.ROTATING_BEAM, 1.0f, 1.3f, 3.2f, 0f)
         )
-        val checkpoints = listOf(CheckpointDef(0f, 2.8f, -39f, 1))
+        val checkpoints = listOf(
+            CheckpointDef(0f, 0.65f, -11f, 1, safeYaw = 180f),
+            CheckpointDef(0f, 0.65f, -24f, 2, safeYaw = 180f),
+            CheckpointDef(0f, 2.85f, -39f, 3, safeYaw = 180f),
+            CheckpointDef(0f, 2.85f, -55f, 4, safeYaw = 180f)
+        )
         val coins = listOf(
             CoinDef(0f, 1.4f, -10f),
             CoinDef(-2f, 1.4f, -21f),

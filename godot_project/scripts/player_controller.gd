@@ -1,10 +1,21 @@
 extends CharacterBody3D
 
-const RUN_SPEED: float = 8.4
-const JUMP_VELOCITY: float = 11.2
-const DIVE_SPEED: float = 13.5
-const DASH_SPEED: float = 18.0
-const GRAVITY: float = 25.0
+## MYTHORIA games — By ahmed
+## DON'T FALL 3D Character Controller with Independent Checkpoint & Portal Respawn State.
+## Supports both local human player ("player_0") and independent AI/multiplayer racers ("rival_1".."rival_4").
+
+signal checkpoint_reached(player_id: String, checkpoint_index: int)
+signal individual_respawn_started(player_id: String, checkpoint_index: int, respawn_pos: Vector3)
+signal individual_respawn_completed(player_id: String, checkpoint_index: int)
+
+@export var player_id: String = "player_0"
+@export var is_ai_racer: bool = false
+@export var move_speed: float = 8.4
+@export var jump_velocity: float = 11.6
+@export var dive_speed: float = 12.6
+@export var dash_speed: float = 17.0
+@export var gravity_base: float = 28.5
+@export var lane_bias_x: float = 0.0
 
 var joy_input: Vector2 = Vector2.ZERO
 var camera_yaw_deg: float = 0.0
@@ -13,135 +24,194 @@ var jump_buffer_timer: float = 0.0
 var dive_timer: float = 0.0
 var dive_cooldown: float = 0.0
 var dash_cooldown: float = 0.0
-var spawn_pos: Vector3 = Vector3(0.0, 2.0, 1.5)
-var visual_root: Node3D
+var hit_stun_timer: float = 0.0
+
+# Independent Per-Player Checkpoint & Respawn State
+var last_activated_checkpoint: int = 0
+var activated_checkpoints: Dictionary = {0: true}
+var safe_respawn_pos: Vector3 = Vector3(0.0, 1.8, 1.5)
+var safe_respawn_yaw_deg: float = 180.0
+var is_respawning: bool = false
+var respawn_timer_sec: float = 0.0
+var fall_anim_timer_sec: float = 0.0
+var arrival_anim_timer_sec: float = 0.0
+var portal_scale: float = 0.0
+var race_progress: float = 0.0
+var finished: bool = false
+var respawn_count: int = 0
+
+var portal_ring_mesh: MeshInstance3D
+
+@onready var visual_root: Node3D = get_node_or_null("VisualRoot")
 
 func _ready() -> void:
-	build_stylized_hero_mesh()
+	safe_respawn_pos = global_position
+	safe_respawn_yaw_deg = 180.0
+	_create_portal_ring_visual()
 
-func build_stylized_hero_mesh() -> void:
-	visual_root = Node3D.new()
-	visual_root.name = "VisualRoot"
-	add_child(visual_root)
+func _create_portal_ring_visual() -> void:
+	portal_ring_mesh = MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 1.25
+	cyl.bottom_radius = 1.25
+	cyl.height = 0.10
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.0, 0.90, 1.0, 0.85)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.82, 0.17)
+	mat.emission_energy_multiplier = 2.0
+	cyl.material = mat
+	portal_ring_mesh.mesh = cyl
+	portal_ring_mesh.position = Vector3(0.0, 0.1, 0.0)
+	portal_ring_mesh.visible = false
+	add_child(portal_ring_mesh)
 
-	var skin: Dictionary = GameState.get_skin_def(GameState.selected_skin_id)
-	var hoodie_col: Color = skin.get("hoodie", Color(0.9, 0.18, 0.3))
-	var pants_col: Color = skin.get("pants", Color(0.12, 0.16, 0.28))
+func initialize_spawn(start_pos: Vector3, start_yaw_deg: float = 180.0) -> void:
+	global_position = start_pos
+	velocity = Vector3.ZERO
+	last_activated_checkpoint = 0
+	activated_checkpoints = {0: true}
+	safe_respawn_pos = start_pos
+	safe_respawn_yaw_deg = start_yaw_deg
+	is_respawning = false
+	respawn_timer_sec = 0.0
+	fall_anim_timer_sec = 0.0
+	arrival_anim_timer_sec = 0.0
+	portal_scale = 0.0
+	finished = false
+	respawn_count = 0
+	if visual_root:
+		visual_root.rotation.y = deg_to_rad(start_yaw_deg)
 
-	# Torso (Hoodie)
-	var torso := MeshInstance3D.new()
-	var torso_mesh := CapsuleMesh.new()
-	torso_mesh.radius = 0.34
-	torso_mesh.height = 0.92
-	var torso_mat := StandardMaterial3D.new()
-	torso_mat.albedo_color = hoodie_col
-	torso_mat.roughness = 0.45
-	torso_mesh.material = torso_mat
-	torso.mesh = torso_mesh
-	torso.position = Vector3(0.0, 0.72, 0.0)
-	visual_root.add_child(torso)
-
-	# Head
-	var head := MeshInstance3D.new()
-	var head_mesh := SphereMesh.new()
-	head_mesh.radius = 0.31
-	head_mesh.height = 0.62
-	var head_mat := StandardMaterial3D.new()
-	head_mat.albedo_color = Color(1.0, 0.8, 0.66)
-	head_mesh.material = head_mat
-	head.mesh = head_mesh
-	head.position = Vector3(0.0, 1.38, 0.0)
-	visual_root.add_child(head)
-
-	# Golden Crown Emblem on Top
-	var crown := MeshInstance3D.new()
-	var crown_mesh := CylinderMesh.new()
-	crown_mesh.top_radius = 0.22
-	crown_mesh.bottom_radius = 0.18
-	crown_mesh.height = 0.16
-	var crown_mat := StandardMaterial3D.new()
-	crown_mat.albedo_color = Color(1.0, 0.82, 0.16)
-	crown_mat.metallic = 0.75
-	crown_mat.roughness = 0.22
-	crown_mesh.material = crown_mat
-	crown.mesh = crown_mesh
-	crown.position = Vector3(0.0, 1.72, 0.0)
-	visual_root.add_child(crown)
-
-	# Legs
-	for side in [-1.0, 1.0]:
-		var leg := MeshInstance3D.new()
-		var leg_mesh := BoxMesh.new()
-		leg_mesh.size = Vector3(0.22, 0.42, 0.24)
-		var leg_mat := StandardMaterial3D.new()
-		leg_mat.albedo_color = pants_col
-		leg_mesh.material = leg_mat
-		leg.mesh = leg_mesh
-		leg.position = Vector3(side * 0.15, 0.21, 0.0)
-		visual_root.add_child(leg)
+## Strictly ordered checkpoint activation:
+## Only activates if checkpoint_index == last_activated_checkpoint + 1.
+## Moving backward to an earlier checkpoint never overwrites higher checkpoint progress.
+func try_activate_checkpoint(cp_index: int, cp_safe_pos: Vector3, cp_safe_yaw_deg: float = 180.0) -> bool:
+	if cp_index != last_activated_checkpoint + 1:
+		return false
+	last_activated_checkpoint = cp_index
+	activated_checkpoints[cp_index] = true
+	safe_respawn_pos = cp_safe_pos + Vector3(lane_bias_x * 0.35, 0.0, 0.0)
+	safe_respawn_yaw_deg = cp_safe_yaw_deg
+	if player_id == "player_0":
+		AudioSynth.play_sfx("checkpoint")
+	checkpoint_reached.emit(player_id, cp_index)
+	return true
 
 func request_jump() -> void:
-	jump_buffer_timer = 0.15
+	jump_buffer_timer = 0.14
 
 func request_dive() -> void:
-	if dive_timer <= 0.0 and dive_cooldown <= 0.0:
-		dive_timer = 0.40
-		dive_cooldown = 0.68
-		var forward_dir: Vector3 = -global_transform.basis.z.normalized()
-		velocity.x = forward_dir.x * DIVE_SPEED
-		velocity.z = forward_dir.z * DIVE_SPEED
-		velocity.y = maxf(velocity.y, 4.2)
+	if dive_timer > 0.0 or dive_cooldown > 0.0 or hit_stun_timer > 0.0:
+		return
+	var yaw_rad: float = visual_root.rotation.y if visual_root else 0.0
+	var fwd := Vector3(sin(yaw_rad), 0.0, cos(yaw_rad))
+	velocity.x = fwd.x * dive_speed
+	velocity.z = fwd.z * dive_speed
+	velocity.y = 4.4 if is_on_floor() else maxf(velocity.y, 2.4)
+	dive_timer = 0.42
+	dive_cooldown = 0.68
+	if player_id == "player_0":
 		AudioSynth.play_sfx("dive")
 
 func request_dash() -> void:
-	if dash_cooldown <= 0.0:
-		dash_cooldown = 2.2
-		var forward_dir: Vector3 = -global_transform.basis.z.normalized()
-		velocity.x = forward_dir.x * DASH_SPEED
-		velocity.z = forward_dir.z * DASH_SPEED
-		velocity.y = maxf(velocity.y, 2.0)
+	if not GameState.dash_unlocked or dash_cooldown > 0.0 or hit_stun_timer > 0.0:
+		return
+	var yaw_rad: float = visual_root.rotation.y if visual_root else 0.0
+	velocity.x = sin(yaw_rad) * dash_speed
+	velocity.z = cos(yaw_rad) * dash_speed
+	velocity.y = maxf(velocity.y, 1.6)
+	dash_cooldown = 2.4
+	if player_id == "player_0":
 		AudioSynth.play_sfx("dash")
 
+## Individual Non-Blocking Respawn:
+## Respawns ONLY this specific player at their latest activated checkpoint.
+## Never resets the match, never teleports other players, and never interrupts moving platforms/obstacles.
 func respawn_at_checkpoint() -> void:
-	global_position = spawn_pos
+	global_position = safe_respawn_pos
 	velocity = Vector3.ZERO
 	dive_timer = 0.0
+	hit_stun_timer = 0.0
+	is_respawning = true
+	respawn_timer_sec = 1.05
+	fall_anim_timer_sec = 0.25
+	arrival_anim_timer_sec = 0.80
+	portal_scale = 1.0
+	respawn_count += 1
+	if visual_root:
+		visual_root.rotation.y = deg_to_rad(safe_respawn_yaw_deg)
+		visual_root.scale = Vector3(0.85, 1.24, 0.85)
+	if is_instance_valid(portal_ring_mesh):
+		portal_ring_mesh.visible = true
+		portal_ring_mesh.scale = Vector3.ONE
+	if player_id == "player_0":
+		AudioSynth.play_sfx("checkpoint")
+	individual_respawn_started.emit(player_id, last_activated_checkpoint, safe_respawn_pos)
 
 func _physics_process(delta: float) -> void:
+	if is_respawning:
+		respawn_timer_sec = maxf(0.0, respawn_timer_sec - delta)
+		fall_anim_timer_sec = maxf(0.0, fall_anim_timer_sec - delta)
+		arrival_anim_timer_sec = maxf(0.0, arrival_anim_timer_sec - delta)
+		portal_scale = clampf(respawn_timer_sec / 1.05, 0.0, 1.0)
+		if is_instance_valid(portal_ring_mesh):
+			portal_ring_mesh.visible = portal_scale > 0.05
+			portal_ring_mesh.scale = Vector3(1.0 + (1.0 - portal_scale) * 0.6, 1.0, 1.0 + (1.0 - portal_scale) * 0.6)
+			portal_ring_mesh.rotation.y += delta * 6.0
+		if respawn_timer_sec <= 0.0:
+			is_respawning = false
+			portal_scale = 0.0
+			if is_instance_valid(portal_ring_mesh):
+				portal_ring_mesh.visible = false
+			individual_respawn_completed.emit(player_id, last_activated_checkpoint)
+
+	if finished:
+		if visual_root:
+			visual_root.rotation.y += delta * 1.4
+		return
+
 	if is_on_floor():
 		coyote_timer = 0.14
 	else:
 		coyote_timer = maxf(0.0, coyote_timer - delta)
-		velocity.y -= GRAVITY * delta
+		velocity.y -= gravity_base * delta
 
-	if jump_buffer_timer > 0.0:
-		jump_buffer_timer = maxf(0.0, jump_buffer_timer - delta)
-		if coyote_timer > 0.0:
-			velocity.y = JUMP_VELOCITY
-			coyote_timer = 0.0
-			jump_buffer_timer = 0.0
+	jump_buffer_timer = maxf(0.0, jump_buffer_timer - delta)
+	dive_timer = maxf(0.0, dive_timer - delta)
+	dive_cooldown = maxf(0.0, dive_cooldown - delta)
+	dash_cooldown = maxf(0.0, dash_cooldown - delta)
+	hit_stun_timer = maxf(0.0, hit_stun_timer - delta)
+
+	if jump_buffer_timer > 0.0 and coyote_timer > 0.0 and hit_stun_timer <= 0.0:
+		velocity.y = jump_velocity
+		coyote_timer = 0.0
+		jump_buffer_timer = 0.0
+		if visual_root:
+			visual_root.scale = Vector3(0.86, 1.24, 0.86)
+		if player_id == "player_0":
 			AudioSynth.play_sfx("jump")
 
-	if dive_cooldown > 0.0:
-		dive_cooldown = maxf(0.0, dive_cooldown - delta)
-	if dash_cooldown > 0.0:
-		dash_cooldown = maxf(0.0, dash_cooldown - delta)
+	if not is_ai_racer:
+		var kb := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+		var raw_in: Vector2 = joy_input if joy_input.length() > 0.08 else kb
+		var cam_rad: float = deg_to_rad(camera_yaw_deg)
+		var fwd := Vector3(-sin(cam_rad), 0.0, -cos(cam_rad))
+		var right := Vector3(cos(cam_rad), 0.0, -sin(cam_rad))
+		var wish_dir: Vector3 = (right * raw_in.x + fwd * (-raw_in.y)).normalized()
 
-	if dive_timer > 0.0:
-		dive_timer = maxf(0.0, dive_timer - delta)
-	else:
-		var kb_vec: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-		var combined: Vector2 = joy_input if joy_input.length() > 0.08 else kb_vec
-		var yaw_rad: float = deg_to_rad(camera_yaw_deg)
-		var move_dir: Vector3 = Vector3(combined.x, 0.0, combined.y).rotated(Vector3.UP, yaw_rad)
-		if move_dir.length() > 0.05:
-			move_dir = move_dir.normalized()
-			velocity.x = lerpf(velocity.x, move_dir.x * RUN_SPEED, delta * 10.0)
-			velocity.z = lerpf(velocity.z, move_dir.z * RUN_SPEED, delta * 10.0)
-			var target_angle: float = atan2(-move_dir.x, -move_dir.z)
-			rotation.y = lerp_angle(rotation.y, target_angle, delta * 12.0)
-		else:
-			velocity.x = move_toward(velocity.x, 0.0, RUN_SPEED * delta * 8.0)
-			velocity.z = move_toward(velocity.z, 0.0, RUN_SPEED * delta * 8.0)
+		if dive_timer <= 0.0 and hit_stun_timer <= 0.0:
+			if raw_in.length() > 0.08:
+				velocity.x = move_toward(velocity.x, wish_dir.x * move_speed, 36.0 * delta)
+				velocity.z = move_toward(velocity.z, wish_dir.z * move_speed, 36.0 * delta)
+				if visual_root:
+					var target_yaw: float = atan2(wish_dir.x, wish_dir.z)
+					visual_root.rotation.y = lerp_angle(visual_root.rotation.y, target_yaw, 12.0 * delta)
+			else:
+				velocity.x = move_toward(velocity.x, 0.0, 24.0 * delta)
+				velocity.z = move_toward(velocity.z, 0.0, 24.0 * delta)
+
+	if visual_root:
+		visual_root.scale = visual_root.scale.lerp(Vector3.ONE, 12.0 * delta)
 
 	move_and_slide()

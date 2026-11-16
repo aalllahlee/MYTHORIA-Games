@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://mythoria_checkpoint_3d"]
+
+[ext_resource type="Script" path="res://scripts/checkpoint_3d.gd" id="1_cp"]
+
+[node name="Checkpoint3D" type="Area3D"]
+script = ExtResource("1_cp")

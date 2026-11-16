@@ -222,15 +222,43 @@ class GameRenderer(
             }
         }
 
-        // Checkpoints
+        // MYTHORIA 3D Checkpoints (Ancient Magical Stone Pillars, Golden Runes, Glowing Sapphire Crystal Core & Crown Crest)
+        val marbleStone = Rgba.fromHex(0xE2E8F0)
+        val sapphireGlow = Rgba.fromHex(0x00E5FF)
+        val deepSapphire = Rgba.fromHex(0x0077FF)
         val checkpoints = world.activeCheckpoints
         for (i in 0 until checkpoints.size) {
             val cp = checkpoints[i]
+            if (abs(cp.z - world.pz) > 110f) continue
             val reached = world.highestCheckpointIndex >= cp.index
-            val col = if (reached) greenCheck else gold
-            drawCylinder(cp.x - 1.9f, cp.y + 1.3f, cp.z, 0.25f, 2.6f, 0.25f, darkMetal)
-            drawCylinder(cp.x + 1.9f, cp.y + 1.3f, cp.z, 0.25f, 2.6f, 0.25f, darkMetal)
-            drawBlock(cp.x, cp.y + 2.5f, cp.z, 4.1f, 0.45f, 0.35f, col, white, pattern = 4)
+            val pulseRem = world.checkpointPulseTimers[cp.index] ?: 0f
+            val pulseBoost = if (pulseRem > 0f) sin(pulseRem * 9f) * 0.25f + 0.35f else 0f
+
+            // Glowing Activation Ring on the Sanctuary Platform
+            val ringCol = if (reached) sapphireGlow else gold
+            val ringScale = 3.2f + (if (reached) 0.15f * sin(t * 4f + cp.index) else 0f) + pulseBoost * 0.8f
+            drawCylinder(cp.x, cp.y + 0.06f, cp.z, ringScale, 0.08f, ringScale, ringCol, pattern = 4)
+
+            // Twin Ancient Marble/Stone Columns with Golden Rune Rings
+            for (side in listOf(-2.25f, 2.25f)) {
+                drawBlock(cp.x + side, cp.y + 0.22f, cp.z, 0.82f, 0.42f, 0.82f, gold)
+                drawCylinder(cp.x + side, cp.y + 1.55f, cp.z, 0.44f, 2.6f, 0.44f, marbleStone)
+                // Golden Rune Bands on Pillar
+                drawCylinder(cp.x + side, cp.y + 1.05f + pulseBoost * 0.2f, cp.z, 0.52f, 0.22f, 0.52f, gold, pattern = 4)
+                drawCylinder(cp.x + side, cp.y + 2.05f + pulseBoost * 0.2f, cp.z, 0.52f, 0.22f, 0.52f, if (reached) sapphireGlow else gold, pattern = 4)
+                // Pillar Capital & Floating Sapphire Crystal Orb
+                drawBlock(cp.x + side, cp.y + 2.95f, cp.z, 0.86f, 0.36f, 0.86f, gold)
+                val crystalY = cp.y + 3.45f + sin(t * 3.2f + side) * 0.14f + pulseBoost * 0.35f
+                drawSphere(cp.x + side, crystalY, cp.z, 0.48f + pulseBoost * 0.18f, if (reached) sapphireGlow else deepSapphire, white, pattern = 4)
+            }
+
+            // Overhead Mythoria Golden Rune Arch & Central Rotating Crown / Sapphire Gem
+            val archCol = if (reached) sapphireGlow else gold
+            val archAlt = if (reached) gold else white
+            drawBlock(cp.x, cp.y + 3.15f + pulseBoost * 0.15f, cp.z, 5.2f, 0.48f, 0.48f, gold, archCol, pattern = 2)
+            val gemY = cp.y + 3.82f + sin(t * 3.5f + cp.index) * 0.12f + pulseBoost * 0.3f
+            drawCone(cp.x, gemY + 0.32f, cp.z, 0.85f, 0.65f, gold, pattern = 4)
+            drawSphere(cp.x, gemY, cp.z, 0.58f + pulseBoost * 0.2f, archCol, archAlt, pattern = 4)
         }
 
         // Coins
@@ -250,6 +278,13 @@ class GameRenderer(
             drawObstacle(obs, theme, obsT)
         }
 
+        // Magical Blue & Gold Portal Effect for Local Player when Respawning at Checkpoint
+        if (world.playerCheckpointState.isRespawning) {
+            val pScale = world.playerCheckpointState.portalScale.coerceIn(0.15f, 1f)
+            drawCylinder(world.px, world.py + 0.08f, world.pz, 2.4f * pScale, 0.12f, 2.4f * pScale, sapphireGlow, pattern = 4)
+            drawCylinder(world.px, world.py + 0.95f * (1f - pScale * 0.4f), world.pz, 1.85f * pScale, 0.10f, 1.85f * pScale, gold, pattern = 4)
+        }
+
         // Player Character
         charRenderer.drawCharacter(
             cartoonShader, vpMatrix,
@@ -257,22 +292,27 @@ class GameRenderer(
             world.playerYaw, world.animState, world.animTime,
             world.selectedSkin, world.selectedHatId, world.selectedShoeId,
             world.squashY,
-            hitFlash = world.hitStunTimer > 0f && ((t * 20f).toInt() % 2 == 0),
+            hitFlash = (world.hitStunTimer > 0f || world.playerCheckpointState.arrivalAnimTimerSec > 0.35f) && ((t * 20f).toInt() % 2 == 0),
             showLeaderCrown = world.currentMode == GameMode.RIVAL_RACE && world.computePlayerRaceRank() == 1
         )
 
-        // AI Rival Racers
+        // AI Rival Racers (with independent portal rings if a specific rival is respawning)
         val rivals = world.rivals
         for (i in 0 until rivals.size) {
             val r = rivals[i]
             if (abs(r.z - world.pz) > 105f) continue
+            if (r.checkpointState.isRespawning) {
+                val rScale = r.checkpointState.portalScale.coerceIn(0.15f, 1f)
+                drawCylinder(r.x, r.y + 0.08f, r.z, 2.2f * rScale, 0.11f, 2.2f * rScale, sapphireGlow, pattern = 4)
+                drawCylinder(r.x, r.y + 0.85f * (1f - rScale * 0.4f), r.z, 1.65f * rScale, 0.09f, 1.65f * rScale, gold, pattern = 4)
+            }
             charRenderer.drawCharacter(
                 cartoonShader, vpMatrix,
                 r.x, r.y, r.z,
                 r.yaw, r.animState, r.animTime,
                 r.skin, r.hatId, r.shoeId,
                 r.squashY,
-                hitFlash = r.hitStunTimer > 0f && ((t * 20f).toInt() % 2 == 0),
+                hitFlash = (r.hitStunTimer > 0f || r.checkpointState.arrivalAnimTimerSec > 0.35f) && ((t * 20f).toInt() % 2 == 0),
                 showLeaderCrown = r.finishOrder == 1
             )
         }
