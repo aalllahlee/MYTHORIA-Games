@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Symmetrical Golden Angelic Wings (Left & Right) -->
+    <path
+        android:fillColor="#E58E00"
+        android:pathData="M34,46 L16,33 L24,42 L15,43 L25,49 L18,52 L32,55 Z" />
+    <path
+        android:fillColor="#FFD22B"
+        android:pathData="M36,44 L19,31 L27,40 L18,41 L28,47 L21,50 L34,53 Z" />
+    <path
+        android:fillColor="#E58E00"
+        android:pathData="M74,46 L92,33 L84,42 L93,43 L83,49 L90,52 L76,55 Z" />
+    <path
+        android:fillColor="#FFD22B"
+        android:pathData="M72,44 L89,31 L81,40 L90,41 L80,47 L87,50 L74,53 Z" />
+
+    <!-- Ancient Temple Portal Halo Ring -->
+    <path
+        android:fillColor="#0052CC"
+        android:strokeColor="#00D4FF"
+        android:strokeWidth="1.5"
+        android:pathData="M54,23 A22,22 0 1,1 53.9,23 Z" />
+
+    <!-- 5-Peak Royal Golden Crown -->
+    <path
+        android:fillColor="#E58E00"
+        android:pathData="M33,44 L30,30 L41,37 L46,26 L54,34 L62,26 L67,37 L78,30 L75,44 Z" />
+    <path
+        android:fillColor="#FFD22B"
+        android:pathData="M34,43 L32,31 L42,37 L47,27 L54,22 L61,27 L66,37 L76,31 L74,43 Z" />
+    <!-- Crown Base Band -->
+    <path
+        android:fillColor="#FFF3B0"
+        android:pathData="M34,42 L74,42 L73,46 L35,46 Z" />
+
+    <!-- Blue Sapphire Diamonds on Crown -->
+    <path
+        android:fillColor="#00D4FF"
+        android:pathData="M54,32 L57,37 L54,42 L51,37 Z" />
+    <path
+        android:fillColor="#0077FF"
+        android:pathData="M43,36 L45,39 L43,42 L41,39 Z" />
+    <path
+        android:fillColor="#0077FF"
+        android:pathData="M65,36 L67,39 L65,42 L63,39 Z" />
+
+    <!-- Central Mythoria Golden Crest Shield & "M" Emblem -->
+    <path
+        android:fillColor="#101B3D"
+        android:strokeColor="#FFD22B"
+        android:strokeWidth="2.2"
+        android:pathData="M26,47 L82,47 L77,68 L54,78 L31,68 Z" />
+
+    <!-- Metallic Golden "M" with Blue Diamond Core -->
+    <path
+        android:fillColor="#FFD22B"
+        android:pathData="M34,65 L34,50 L42,50 L48,59 L54,50 L60,59 L66,50 L74,50 L74,65 L68,65 L68,56 L61,65 L57,65 L54,59 L51,65 L47,65 L40,56 L40,65 Z" />
+
+    <!-- Glowing Blue Sapphire Diamond in Center Lower Plaque -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M54,65 L58,70 L54,75 L50,70 Z" />
+
+    <!-- Ancient Marble Temple Pedestal Base -->
+    <path
+        android:fillColor="#FFD22B"
+        android:pathData="M24,80 L84,80 L80,86 L28,86 Z" />
+</vector>

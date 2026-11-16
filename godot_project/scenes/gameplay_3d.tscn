@@ -1,0 +1,202 @@
+[gd_scene load_steps=7 format=3 uid="uid://gameplay_3d_dontfall"]
+
+[ext_resource type="Script" path="res://scripts/gameplay_3d.gd" id="1_game"]
+[ext_resource type="Script" path="res://scripts/player_controller.gd" id="2_player"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+sky_top_color = Color(0.118, 0.533, 0.898, 1)
+sky_horizon_color = Color(0.545, 0.914, 1, 1)
+ground_bottom_color = Color(0.055, 0.125, 0.32, 1)
+ground_horizon_color = Color(0.545, 0.914, 1, 1)
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 3
+ambient_light_color = Color(0.85, 0.92, 1, 1)
+ambient_light_energy = 0.75
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_hero"]
+radius = 0.36
+height = 1.65
+
+[node name="Gameplay3D" type="Node3D"]
+script = ExtResource("1_game")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.383022, 0.321394, 0, 0.642788, 0.766044, -0.5, -0.663414, 0.55667, 0, 14, 8)
+shadow_enabled = true
+
+[node name="TrackRoot" type="Node3D" parent="."]
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 1.5)
+script = ExtResource("2_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("CapsuleShape3D_hero")
+
+[node name="CameraRig" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.8, 9.7)
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+current = true
+fov = 65.0
+
+[node name="HUD" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TopBar" type="HBoxContainer" parent="HUD"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 24.0
+offset_top = 16.0
+offset_right = -24.0
+offset_bottom = 66.0
+grow_horizontal = 2
+theme_override_constants/separation = 24
+
+[node name="LevelLabel" type="Label" parent="HUD/TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "W1 STAGE 1"
+
+[node name="TimerLabel" type="Label" parent="HUD/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "00.00s / Goal <= 60s"
+horizontal_alignment = 1
+
+[node name="CoinsLabel" type="Label" parent="HUD/TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "COINS: 0  |  SPEED: 1.00x"
+
+[node name="MenuButton" type="Button" parent="HUD/TopBar"]
+custom_minimum_size = Vector2(130, 48)
+layout_mode = 2
+text = "MAP / MENU"
+
+[node name="GoalBanner" type="Label" parent="HUD"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 70.0
+offset_bottom = 104.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 18
+text = "PROGRESSION GOAL: Reach Finish within target time!"
+horizontal_alignment = 1
+
+[node name="ActionButtons" type="HBoxContainer" parent="HUD"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -420.0
+offset_top = -132.0
+offset_right = -28.0
+offset_bottom = -28.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 16
+
+[node name="DashButton" type="Button" parent="HUD/ActionButtons"]
+custom_minimum_size = Vector2(112, 96)
+layout_mode = 2
+text = "DASH"
+
+[node name="DiveButton" type="Button" parent="HUD/ActionButtons"]
+custom_minimum_size = Vector2(112, 96)
+layout_mode = 2
+text = "DIVE"
+
+[node name="JumpButton" type="Button" parent="HUD/ActionButtons"]
+custom_minimum_size = Vector2(128, 96)
+layout_mode = 2
+text = "JUMP"
+
+[node name="ResultPanel" type="Panel" parent="HUD"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -260.0
+offset_top = -140.0
+offset_right = 260.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="HUD/ResultPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 18
+alignment = 1
+
+[node name="ResultTitle" type="Label" parent="HUD/ResultPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "STAGE COMPLETED!"
+horizontal_alignment = 1
+
+[node name="ResultDetails" type="Label" parent="HUD/ResultPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Time: 00.00s"
+horizontal_alignment = 1
+
+[node name="ButtonsRow" type="HBoxContainer" parent="HUD/ResultPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="NextButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+text = "NEXT STAGE"
+
+[node name="RetryButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(140, 50)
+layout_mode = 2
+text = "REPLAY"
+
+[node name="BackMenuButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(140, 50)
+layout_mode = 2
+text = "WORLD MAP"
+
+[connection signal="pressed" from="HUD/TopBar/MenuButton" to="." method="_on_menu_button_pressed"]
+[connection signal="pressed" from="HUD/ActionButtons/DashButton" to="." method="_on_dash_button_pressed"]
+[connection signal="pressed" from="HUD/ActionButtons/DiveButton" to="." method="_on_dive_button_pressed"]
+[connection signal="pressed" from="HUD/ActionButtons/JumpButton" to="." method="_on_jump_button_pressed"]
+[connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/NextButton" to="." method="_on_next_button_pressed"]
+[connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/RetryButton" to="." method="_on_retry_button_pressed"]
+[connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/BackMenuButton" to="." method="_on_menu_button_pressed"]

@@ -1,0 +1,6 @@
+{
+  "name": "DON'T FALL",
+  "description": "A colorful 3D mythological obstacle survival adventure developed by MYTHORIA games — By ahmed.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
