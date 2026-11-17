@@ -1,149 +1,217 @@
-[gd_scene load_steps=7 format=3 uid="uid://gameplay_3d_dontfall"]
+[gd_scene load_steps=7 format=3 uid="uid://mythoria_gameplay_3d"]
 
-[ext_resource type="Script" path="res://scripts/gameplay_3d.gd" id="1_game"]
+[ext_resource type="Script" path="res://scripts/gameplay_3d.gd" id="1_gameplay"]
 [ext_resource type="Script" path="res://scripts/player_controller.gd" id="2_player"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
-sky_top_color = Color(0.118, 0.533, 0.898, 1)
-sky_horizon_color = Color(0.545, 0.914, 1, 1)
-ground_bottom_color = Color(0.055, 0.125, 0.32, 1)
-ground_horizon_color = Color(0.545, 0.914, 1, 1)
+sky_top_color = Color(0.08, 0.36, 0.88, 1)
+sky_horizon_color = Color(0.46, 0.78, 1.0, 1)
+ground_bottom_color = Color(0.12, 0.24, 0.56, 1)
+ground_horizon_color = Color(0.46, 0.78, 1.0, 1)
 
-[sub_resource type="Sky" id="Sky_main"]
+[sub_resource type="Sky" id="Sky_env"]
 sky_material = SubResource("ProceduralSkyMaterial_sky")
 
-[sub_resource type="Environment" id="Environment_main"]
+[sub_resource type="Environment" id="Environment_world"]
 background_mode = 2
-sky = SubResource("Sky_main")
+sky = SubResource("Sky_env")
 ambient_light_source = 3
-ambient_light_color = Color(0.85, 0.92, 1, 1)
-ambient_light_energy = 0.75
+ambient_light_color = Color(0.76, 0.86, 1.0, 1)
+ambient_light_energy = 1.15
+tonemap_mode = 2
+glow_enabled = true
+glow_intensity = 0.65
+glow_bloom = 0.14
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_hero"]
-radius = 0.36
-height = 1.65
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_p"]
+radius = 0.38
+height = 1.35
 
 [node name="Gameplay3D" type="Node3D"]
-script = ExtResource("1_game")
+script = ExtResource("1_gameplay")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource("Environment_main")
+environment = SubResource("Environment_world")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866025, -0.383022, 0.321394, 0, 0.642788, 0.766044, -0.5, -0.663414, 0.55667, 0, 14, 8)
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 14, 6)
+light_color = Color(1, 0.96, 0.86, 1)
+light_energy = 1.45
 shadow_enabled = true
 
 [node name="TrackRoot" type="Node3D" parent="."]
 
 [node name="Player" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 1.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 1.5)
 script = ExtResource("2_player")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
-shape = SubResource("CapsuleShape3D_hero")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.68, 0)
+shape = SubResource("CapsuleShape3D_p")
 
 [node name="CameraRig" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.8, 9.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.2, 9.5)
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
-current = true
-fov = 65.0
+fov = 60.0
 
-[node name="HUD" type="Control" parent="."]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="HUD" type="CanvasLayer" parent="."]
 
-[node name="TopBar" type="HBoxContainer" parent="HUD"]
-layout_mode = 1
+[node name="TopBarPanel" type="Panel" parent="HUD"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 24.0
-offset_top = 16.0
-offset_right = -24.0
-offset_bottom = 66.0
+offset_left = 14.0
+offset_top = 10.0
+offset_right = -14.0
+offset_bottom = 68.0
 grow_horizontal = 2
-theme_override_constants/separation = 24
+
+[node name="TopBar" type="HBoxContainer" parent="HUD"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 26.0
+offset_top = 14.0
+offset_right = -26.0
+offset_bottom = 64.0
+grow_horizontal = 2
+theme_override_constants/separation = 16
+
+[node name="MenuButton" type="Button" parent="HUD/TopBar"]
+custom_minimum_size = Vector2(115, 44)
+layout_mode = 2
+text = "⏸ MENU"
 
 [node name="LevelLabel" type="Label" parent="HUD/TopBar"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "W1 STAGE 1  |  CHECKPOINT 0/4"
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.86, 0.22, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.14, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 18
+text = "👑 W1 STAGE 1  |  CHECKPOINT 0/4"
 
 [node name="TimerLabel" type="Label" parent="HUD/TopBar"]
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 24
-text = "00.00s / Goal <= 60s"
+ size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.35, 0.98, 0.68, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.14, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 18
+text = "⏱ 00.00s / Goal <= 59s"
 horizontal_alignment = 1
 
 [node name="CoinsLabel" type="Label" parent="HUD/TopBar"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "COINS: 0  |  SPEED: 1.00x"
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.90, 0.32, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.14, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 17
+text = "🪙 0  |  ⚡ 1.00x"
+horizontal_alignment = 2
 
-[node name="MenuButton" type="Button" parent="HUD/TopBar"]
-custom_minimum_size = Vector2(130, 48)
-layout_mode = 2
-text = "MAP / MENU"
+[node name="RaceProgressFrame" type="Panel" parent="HUD"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -210.0
+offset_top = 74.0
+offset_right = 210.0
+offset_bottom = 100.0
+grow_horizontal = 2
+
+[node name="RaceProgressFill" type="Panel" parent="HUD/RaceProgressFrame"]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 24.0
+offset_bottom = 22.0
+
+[node name="RaceProgressLabel" type="Label" parent="HUD/RaceProgressFrame"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+text = "👑 START ─────────── 🏁 FINISH"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="GoalBanner" type="Label" parent="HUD"]
-layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_top = 70.0
-offset_bottom = 104.0
+offset_top = 104.0
+offset_bottom = 134.0
 grow_horizontal = 2
-theme_override_font_sizes/font_size = 18
-text = "PROGRESSION GOAL: Reach Finish within target time!"
+theme_override_colors/font_color = Color(1, 0.86, 0.22, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.04, 0.12, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 15
+text = "PROGRESSION GOAL: Reach Finish within Goal Time to unlock next stage/world!"
 horizontal_alignment = 1
 
-[node name="ActionButtons" type="HBoxContainer" parent="HUD"]
-layout_mode = 1
+[node name="JoystickBase" type="Panel" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 48.0
+offset_top = -218.0
+offset_right = 218.0
+offset_bottom = -48.0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="JoystickKnob" type="Panel" parent="HUD/JoystickBase"]
+layout_mode = 0
+offset_left = 47.0
+offset_top = 47.0
+offset_right = 123.0
+offset_bottom = 123.0
+mouse_filter = 2
+
+[node name="TouchControls" type="HBoxContainer" parent="HUD"]
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -420.0
-offset_top = -132.0
-offset_right = -28.0
+offset_left = -410.0
+offset_top = -138.0
+offset_right = -26.0
 offset_bottom = -28.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_constants/separation = 16
 
-[node name="DashButton" type="Button" parent="HUD/ActionButtons"]
-custom_minimum_size = Vector2(112, 96)
+[node name="JumpButton" type="Button" parent="HUD/TouchControls"]
+custom_minimum_size = Vector2(114, 104)
 layout_mode = 2
-text = "DASH"
+text = "🏃\nJUMP"
 
-[node name="DiveButton" type="Button" parent="HUD/ActionButtons"]
-custom_minimum_size = Vector2(112, 96)
+[node name="DiveButton" type="Button" parent="HUD/TouchControls"]
+custom_minimum_size = Vector2(114, 104)
 layout_mode = 2
-text = "DIVE"
+text = "🤸\nDIVE"
 
-[node name="JumpButton" type="Button" parent="HUD/ActionButtons"]
-custom_minimum_size = Vector2(128, 96)
+[node name="DashButton" type="Button" parent="HUD/TouchControls"]
+custom_minimum_size = Vector2(114, 104)
 layout_mode = 2
-text = "JUMP"
+text = "⚡\nDASH"
 
 [node name="ResultPanel" type="Panel" parent="HUD"]
 visible = false
-layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -260.0
-offset_top = -140.0
-offset_right = 260.0
-offset_bottom = 140.0
+offset_left = -280.0
+offset_top = -145.0
+offset_right = 280.0
+offset_bottom = 145.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -152,10 +220,10 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = 20.0
-offset_right = -20.0
-offset_bottom = -20.0
+offset_left = 24.0
+offset_top = 22.0
+offset_right = -24.0
+offset_bottom = -22.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 18
@@ -163,14 +231,20 @@ alignment = 1
 
 [node name="ResultTitle" type="Label" parent="HUD/ResultPanel/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.84, 0.16, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.14, 1)
+theme_override_constants/outline_size = 5
 theme_override_font_sizes/font_size = 28
 text = "STAGE COMPLETED!"
 horizontal_alignment = 1
 
 [node name="ResultDetails" type="Label" parent="HUD/ResultPanel/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.98, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 18
-text = "Time: 00.00s"
+text = "Time: 24.5s  |  Stars: ★★★  |  +120 Coins"
 horizontal_alignment = 1
 
 [node name="ButtonsRow" type="HBoxContainer" parent="HUD/ResultPanel/VBox"]
@@ -178,25 +252,25 @@ layout_mode = 2
 theme_override_constants/separation = 16
 alignment = 1
 
-[node name="NextButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
-custom_minimum_size = Vector2(150, 50)
-layout_mode = 2
-text = "NEXT STAGE"
-
 [node name="RetryButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
-custom_minimum_size = Vector2(140, 50)
+custom_minimum_size = Vector2(145, 54)
 layout_mode = 2
-text = "REPLAY"
+text = "🔄 RETRY"
 
-[node name="BackMenuButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
-custom_minimum_size = Vector2(140, 50)
+[node name="NextButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(165, 54)
 layout_mode = 2
-text = "WORLD MAP"
+text = "▶ NEXT STAGE"
+
+[node name="MenuResultButton" type="Button" parent="HUD/ResultPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(145, 54)
+layout_mode = 2
+text = "🏠 MENU"
 
 [connection signal="pressed" from="HUD/TopBar/MenuButton" to="." method="_on_menu_button_pressed"]
-[connection signal="pressed" from="HUD/ActionButtons/DashButton" to="." method="_on_dash_button_pressed"]
-[connection signal="pressed" from="HUD/ActionButtons/DiveButton" to="." method="_on_dive_button_pressed"]
-[connection signal="pressed" from="HUD/ActionButtons/JumpButton" to="." method="_on_jump_button_pressed"]
-[connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/NextButton" to="." method="_on_next_button_pressed"]
+[connection signal="pressed" from="HUD/TouchControls/JumpButton" to="." method="_on_jump_button_pressed"]
+[connection signal="pressed" from="HUD/TouchControls/DiveButton" to="." method="_on_dive_button_pressed"]
+[connection signal="pressed" from="HUD/TouchControls/DashButton" to="." method="_on_dash_button_pressed"]
 [connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/RetryButton" to="." method="_on_retry_button_pressed"]
-[connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/BackMenuButton" to="." method="_on_menu_button_pressed"]
+[connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/NextButton" to="." method="_on_next_button_pressed"]
+[connection signal="pressed" from="HUD/ResultPanel/VBox/ButtonsRow/MenuResultButton" to="." method="_on_menu_button_pressed"]

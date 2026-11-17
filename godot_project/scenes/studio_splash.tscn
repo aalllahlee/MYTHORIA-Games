@@ -1,7 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://studio_splash_dontfall"]
+[gd_scene load_steps=3 format=3 uid="uid://mythoria_splash_scene"]
 
 [ext_resource type="Script" path="res://scripts/studio_splash.gd" id="1_splash"]
-[ext_resource type="Texture2D" path="res://assets/mythoria_splash_art.png" id="2_bg"]
+[ext_resource type="Texture2D" path="res://assets/mythoria_splash_art.png" id="2_splash_art"]
 
 [node name="StudioSplash" type="Control"]
 layout_mode = 3
@@ -12,75 +12,80 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_splash")
 
+[node name="BgRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.02, 0.04, 0.11, 1)
+
 [node name="BackdropArt" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = ExtResource("2_bg")
+texture = ExtResource("2_splash_art")
 expand_mode = 1
 stretch_mode = 6
 
-[node name="CenterBox" type="CenterContainer" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="LightSweep" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = -260.0
+offset_top = 0.0
+offset_right = -60.0
+offset_bottom = 720.0
+color = Color(1, 0.88, 0.35, 0.18)
 
-[node name="VBox" type="VBoxContainer" parent="CenterBox"]
-layout_mode = 2
-theme_override_constants/separation = 8
-alignment = 1
-
-[node name="CrownLabel" type="Label" parent="CenterBox/VBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 56
-text = "♛"
-horizontal_alignment = 1
-
-[node name="TitleLabel" type="Label" parent="CenterBox/VBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 68
-text = "MYTHORIA"
-horizontal_alignment = 1
-
-[node name="GamesBannerLabel" type="Label" parent="CenterBox/VBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 30
-text = "— games —"
-horizontal_alignment = 1
-
-[node name="SubtitleLabel" type="Label" parent="CenterBox/VBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "By ahmed"
-horizontal_alignment = 1
-
-[node name="BottomBox" type="VBoxContainer" parent="."]
+[node name="LoadingBarFrame" type="Panel" parent="."]
 layout_mode = 1
 anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -280.0
-offset_top = -96.0
-offset_right = 280.0
-offset_bottom = -28.0
+offset_left = -335.0
+offset_top = -94.0
+offset_right = 335.0
+offset_bottom = -54.0
 grow_horizontal = 2
 grow_vertical = 0
 
-[node name="LoadingBar" type="ProgressBar" parent="BottomBox"]
-custom_minimum_size = Vector2(560, 26)
-layout_mode = 2
-value = 0.0
+[node name="LoadingBarFill" type="Panel" parent="LoadingBarFrame"]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = 20.0
+offset_bottom = 34.0
 
-[node name="LoadingText" type="Label" parent="BottomBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
+[node name="LoadingLabel" type="Label" parent="LoadingBarFrame"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.14, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 20
 text = "Loading... 0%"
 horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SkipHintLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -250.0
+offset_top = -38.0
+offset_right = -24.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 0.86, 0.35, 0.85)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 14
+text = "MYTHORIA games • By ahmed"
+horizontal_alignment = 2

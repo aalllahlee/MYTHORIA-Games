@@ -1,7 +1,8 @@
 extends CharacterBody3D
 
 ## MYTHORIA games — By ahmed
-## DON'T FALL 3D Character Controller with Independent Checkpoint & Portal Respawn State.
+## DON'T FALL 3D Character Controller with Full 3D Stylized Cartoon Character Mesh,
+## Procedural Limb Animation, and Independent Checkpoint & Portal Respawn State.
 ## Supports both local human player ("player_0") and independent AI/multiplayer racers ("rival_1".."rival_4").
 
 signal checkpoint_reached(player_id: String, checkpoint_index: int)
@@ -10,6 +11,7 @@ signal individual_respawn_completed(player_id: String, checkpoint_index: int)
 
 @export var player_id: String = "player_0"
 @export var is_ai_racer: bool = false
+@export var character_skin_id: int = 0
 @export var move_speed: float = 8.4
 @export var jump_velocity: float = 11.6
 @export var dive_speed: float = 12.6
@@ -25,6 +27,7 @@ var dive_timer: float = 0.0
 var dive_cooldown: float = 0.0
 var dash_cooldown: float = 0.0
 var hit_stun_timer: float = 0.0
+var anim_clock: float = 0.0
 
 # Independent Per-Player Checkpoint & Respawn State
 var last_activated_checkpoint: int = 0
@@ -41,13 +44,23 @@ var finished: bool = false
 var respawn_count: int = 0
 
 var portal_ring_mesh: MeshInstance3D
-
-@onready var visual_root: Node3D = get_node_or_null("VisualRoot")
+var visual_root: Node3D = null
 
 func _ready() -> void:
 	safe_respawn_pos = global_position
 	safe_respawn_yaw_deg = 180.0
+	if not is_ai_racer:
+		character_skin_id = GameState.selected_skin_id
+	_ensure_character_visual()
 	_create_portal_ring_visual()
+
+func _ensure_character_visual() -> void:
+	var existing: Node3D = get_node_or_null("VisualRoot")
+	if is_instance_valid(existing):
+		existing.queue_free()
+	visual_root = CharacterVisualBuilder.build_character_visual(character_skin_id)
+	visual_root.rotation.y = deg_to_rad(safe_respawn_yaw_deg)
+	add_child(visual_root)
 
 func _create_portal_ring_visual() -> void:
 	portal_ring_mesh = MeshInstance3D.new()
@@ -80,7 +93,7 @@ func initialize_spawn(start_pos: Vector3, start_yaw_deg: float = 180.0) -> void:
 	portal_scale = 0.0
 	finished = false
 	respawn_count = 0
-	if visual_root:
+	if is_instance_valid(visual_root):
 		visual_root.rotation.y = deg_to_rad(start_yaw_deg)
 
 ## Strictly ordered checkpoint activation:
@@ -104,7 +117,7 @@ func request_jump() -> void:
 func request_dive() -> void:
 	if dive_timer > 0.0 or dive_cooldown > 0.0 or hit_stun_timer > 0.0:
 		return
-	var yaw_rad: float = visual_root.rotation.y if visual_root else 0.0
+	var yaw_rad: float = visual_root.rotation.y if is_instance_valid(visual_root) else PI
 	var fwd := Vector3(sin(yaw_rad), 0.0, cos(yaw_rad))
 	velocity.x = fwd.x * dive_speed
 	velocity.z = fwd.z * dive_speed
@@ -117,7 +130,7 @@ func request_dive() -> void:
 func request_dash() -> void:
 	if not GameState.dash_unlocked or dash_cooldown > 0.0 or hit_stun_timer > 0.0:
 		return
-	var yaw_rad: float = visual_root.rotation.y if visual_root else 0.0
+	var yaw_rad: float = visual_root.rotation.y if is_instance_valid(visual_root) else PI
 	velocity.x = sin(yaw_rad) * dash_speed
 	velocity.z = cos(yaw_rad) * dash_speed
 	velocity.y = maxf(velocity.y, 1.6)
@@ -139,7 +152,7 @@ func respawn_at_checkpoint() -> void:
 	arrival_anim_timer_sec = 0.80
 	portal_scale = 1.0
 	respawn_count += 1
-	if visual_root:
+	if is_instance_valid(visual_root):
 		visual_root.rotation.y = deg_to_rad(safe_respawn_yaw_deg)
 		visual_root.scale = Vector3(0.85, 1.24, 0.85)
 	if is_instance_valid(portal_ring_mesh):
@@ -150,6 +163,8 @@ func respawn_at_checkpoint() -> void:
 	individual_respawn_started.emit(player_id, last_activated_checkpoint, safe_respawn_pos)
 
 func _physics_process(delta: float) -> void:
+	anim_clock += delta
+
 	if is_respawning:
 		respawn_timer_sec = maxf(0.0, respawn_timer_sec - delta)
 		fall_anim_timer_sec = maxf(0.0, fall_anim_timer_sec - delta)
@@ -167,8 +182,9 @@ func _physics_process(delta: float) -> void:
 			individual_respawn_completed.emit(player_id, last_activated_checkpoint)
 
 	if finished:
-		if visual_root:
-			visual_root.rotation.y += delta * 1.4
+		if is_instance_valid(visual_root):
+			visual_root.rotation.y += delta * 1.6
+			CharacterVisualBuilder.animate_character(visual_root, anim_clock, Vector3.ZERO, true, 0.0, true)
 		return
 
 	if is_on_floor():
@@ -187,7 +203,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = jump_velocity
 		coyote_timer = 0.0
 		jump_buffer_timer = 0.0
-		if visual_root:
+		if is_instance_valid(visual_root):
 			visual_root.scale = Vector3(0.86, 1.24, 0.86)
 		if player_id == "player_0":
 			AudioSynth.play_sfx("jump")
@@ -204,14 +220,19 @@ func _physics_process(delta: float) -> void:
 			if raw_in.length() > 0.08:
 				velocity.x = move_toward(velocity.x, wish_dir.x * move_speed, 36.0 * delta)
 				velocity.z = move_toward(velocity.z, wish_dir.z * move_speed, 36.0 * delta)
-				if visual_root:
+				if is_instance_valid(visual_root):
 					var target_yaw: float = atan2(wish_dir.x, wish_dir.z)
 					visual_root.rotation.y = lerp_angle(visual_root.rotation.y, target_yaw, 12.0 * delta)
 			else:
 				velocity.x = move_toward(velocity.x, 0.0, 24.0 * delta)
 				velocity.z = move_toward(velocity.z, 0.0, 24.0 * delta)
+	else:
+		if is_instance_valid(visual_root) and Vector2(velocity.x, velocity.z).length() > 0.25:
+			var ai_yaw: float = atan2(velocity.x, velocity.z)
+			visual_root.rotation.y = lerp_angle(visual_root.rotation.y, ai_yaw, 10.0 * delta)
 
-	if visual_root:
+	if is_instance_valid(visual_root):
 		visual_root.scale = visual_root.scale.lerp(Vector3.ONE, 12.0 * delta)
+		CharacterVisualBuilder.animate_character(visual_root, anim_clock, velocity, is_on_floor(), dive_timer, finished)
 
 	move_and_slide()

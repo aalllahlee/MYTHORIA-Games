@@ -1,149 +1,363 @@
-[gd_scene load_steps=2 format=3 uid="uid://main_menu_dontfall"]
+[gd_scene load_steps=5 format=3 uid="uid://mythoria_main_menu"]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_menu"]
 
-[node name="MainMenu" type="Control"]
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_menu"]
+sky_top_color = Color(0.10, 0.38, 0.88, 1)
+sky_horizon_color = Color(0.48, 0.78, 1.0, 1)
+ground_bottom_color = Color(0.14, 0.28, 0.62, 1)
+ground_horizon_color = Color(0.48, 0.78, 1.0, 1)
+
+[sub_resource type="Sky" id="Sky_menu"]
+sky_material = SubResource("ProceduralSkyMaterial_menu")
+
+[sub_resource type="Environment" id="Environment_menu"]
+background_mode = 2
+sky = SubResource("Sky_menu")
+ambient_light_source = 3
+ambient_light_color = Color(0.75, 0.86, 1.0, 1)
+ambient_light_energy = 1.15
+tonemap_mode = 2
+glow_enabled = true
+glow_intensity = 0.65
+glow_bloom = 0.15
+
+[node name="MainMenu" type="Node3D"]
+script = ExtResource("1_menu")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_menu")
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 12, 8)
+light_color = Color(1, 0.96, 0.86, 1)
+light_energy = 1.45
+shadow_enabled = true
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 4.2)
+light_color = Color(0.45, 0.82, 1, 1)
+light_energy = 1.2
+omni_range = 14.0
+
+[node name="ShowcaseCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.984808, 0.173648, 0, -0.173648, 0.984808, 0, 2.35, 5.65)
+fov = 50.0
+
+[node name="ShowcaseWorld" type="Node3D" parent="."]
+
+[node name="HeroPedestalPivot" type="Node3D" parent="ShowcaseWorld"]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Root" type="Control" parent="UI"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_menu")
+mouse_filter = 2
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="TopLeftProfile" type="Panel" parent="UI/Root"]
+layout_mode = 0
+offset_left = 18.0
+offset_top = 16.0
+offset_right = 330.0
+offset_bottom = 86.0
+
+[node name="ProfileLabel" type="Label" parent="UI/Root/TopLeftProfile"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.027, 0.051, 0.133, 1)
+offset_left = 14.0
+offset_top = 6.0
+offset_right = -12.0
+offset_bottom = -6.0
+theme_override_colors/font_color = Color(1, 0.96, 0.82, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.15, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 16
+text = "👑 Lv.1  |  Young Greek Hero\n🌍 Worlds Unlocked: 1 / 10"
+vertical_alignment = 1
 
-[node name="TopBar" type="HBoxContainer" parent="."]
+[node name="TopCenterLogo" type="Panel" parent="UI/Root"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -215.0
+offset_top = 12.0
+offset_right = 215.0
+offset_bottom = 114.0
+grow_horizontal = 2
+
+[node name="TitleLabel" type="Label" parent="UI/Root/TopCenterLogo"]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 24.0
-offset_top = 14.0
-offset_right = -24.0
-offset_bottom = 72.0
+offset_top = 4.0
+offset_bottom = 62.0
 grow_horizontal = 2
-theme_override_constants/separation = 18
-alignment = 1
-
-[node name="BrandLabel" type="Label" parent="TopBar"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "DON'T FALL! — MYTHORIA games • By ahmed"
-
-[node name="StatsLabel" type="Label" parent="TopBar"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 17
-text = "LV.1  |  COINS: 120  |  WORLDS UNLOCKED: 1 / 10"
+theme_override_colors/font_color = Color(1, 0.84, 0.16, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.1, 0.28, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 40
+text = "♛ DON'T FALL!"
 horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="ModeButton" type="Button" parent="TopBar"]
-custom_minimum_size = Vector2(200, 48)
+[node name="SubtitleLabel" type="Label" parent="UI/Root/TopCenterLogo"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -42.0
+offset_bottom = -6.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.45, 0.92, 1, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.16, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 16
+text = "MYTHORIA games  •  By ahmed"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TopRightBar" type="HBoxContainer" parent="UI/Root"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -450.0
+offset_top = 16.0
+offset_right = -18.0
+offset_bottom = 72.0
+grow_horizontal = 0
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="CoinsBadge" type="Button" parent="UI/Root/TopRightBar"]
+custom_minimum_size = Vector2(145, 50)
+layout_mode = 2
+text = "🪙 120 +"
+
+[node name="StarsBadge" type="Button" parent="UI/Root/TopRightBar"]
+custom_minimum_size = Vector2(130, 50)
+layout_mode = 2
+text = "★ 0 / 150"
+
+[node name="ModeButton" type="Button" parent="UI/Root/TopRightBar"]
+custom_minimum_size = Vector2(145, 50)
 layout_mode = 2
 text = "MODE: CAREER"
 
-[node name="QuickPlayButton" type="Button" parent="TopBar"]
-custom_minimum_size = Vector2(160, 48)
-layout_mode = 2
-text = "PLAY"
+[node name="LeftQuickDock" type="VBoxContainer" parent="UI/Root"]
+layout_mode = 0
+offset_left = 18.0
+offset_top = 135.0
+offset_right = 188.0
+offset_bottom = 445.0
+theme_override_constants/separation = 14
 
-[node name="NavBar" type="HBoxContainer" parent="."]
+[node name="MissionsQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
+custom_minimum_size = Vector2(165, 68)
+layout_mode = 2
+text = "🏆 Missions"
+
+[node name="DailyGiftQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
+custom_minimum_size = Vector2(165, 68)
+layout_mode = 2
+text = "🎁 Daily Gift"
+
+[node name="WorldGraphQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
+custom_minimum_size = Vector2(165, 68)
+layout_mode = 2
+text = "⚡ World Graph"
+
+[node name="RightMainDock" type="VBoxContainer" parent="UI/Root"]
 layout_mode = 1
-anchors_preset = 10
+anchors_preset = 1
+anchor_left = 1.0
 anchor_right = 1.0
-offset_left = 24.0
-offset_top = 78.0
-offset_right = -24.0
-offset_bottom = 126.0
+offset_left = -265.0
+offset_top = 130.0
+offset_right = -20.0
+offset_bottom = 560.0
+grow_horizontal = 0
+theme_override_constants/separation = 12
+
+[node name="BigPlayButton" type="Button" parent="UI/Root/RightMainDock"]
+custom_minimum_size = Vector2(240, 82)
+layout_mode = 2
+text = "▶ PLAY"
+
+[node name="LevelsButton" type="Button" parent="UI/Root/RightMainDock"]
+custom_minimum_size = Vector2(240, 58)
+layout_mode = 2
+text = "🌍 Levels & Worlds"
+
+[node name="CharactersButton" type="Button" parent="UI/Root/RightMainDock"]
+custom_minimum_size = Vector2(240, 58)
+layout_mode = 2
+text = "👑 Characters"
+
+[node name="ShopButton" type="Button" parent="UI/Root/RightMainDock"]
+custom_minimum_size = Vector2(240, 58)
+layout_mode = 2
+text = "🛒 Mythoria Shop"
+
+[node name="SettingsButton" type="Button" parent="UI/Root/RightMainDock"]
+custom_minimum_size = Vector2(240, 52)
+layout_mode = 2
+text = "⚙ Settings"
+
+[node name="HeroPedestalControls" type="HBoxContainer" parent="UI/Root"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = -98.0
+offset_right = 280.0
+offset_bottom = -20.0
 grow_horizontal = 2
+grow_vertical = 0
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="PlayNavButton" type="Button" parent="NavBar"]
-custom_minimum_size = Vector2(150, 44)
+[node name="PrevSkinBtn" type="Button" parent="UI/Root/HeroPedestalControls"]
+custom_minimum_size = Vector2(58, 58)
 layout_mode = 2
-text = "PLAY"
+text = "◀"
 
-[node name="WorldsNavButton" type="Button" parent="NavBar"]
-custom_minimum_size = Vector2(150, 44)
+[node name="PedestalBadge" type="Panel" parent="UI/Root/HeroPedestalControls"]
+custom_minimum_size = Vector2(390, 68)
 layout_mode = 2
-text = "WORLDS"
 
-[node name="CharactersNavButton" type="Button" parent="NavBar"]
-custom_minimum_size = Vector2(165, 44)
-layout_mode = 2
-text = "CHARACTERS"
-
-[node name="MissionsNavButton" type="Button" parent="NavBar"]
-custom_minimum_size = Vector2(150, 44)
-layout_mode = 2
-text = "MISSIONS"
-
-[node name="ShopNavButton" type="Button" parent="NavBar"]
-custom_minimum_size = Vector2(150, 44)
-layout_mode = 2
-text = "SHOP"
-
-[node name="SettingsNavButton" type="Button" parent="NavBar"]
-custom_minimum_size = Vector2(150, 44)
-layout_mode = 2
-text = "SETTINGS"
-
-[node name="WorldScroll" type="ScrollContainer" parent="."]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 24.0
-offset_top = 136.0
-offset_right = -24.0
-offset_bottom = 224.0
-grow_horizontal = 2
-
-[node name="WorldRow" type="HBoxContainer" parent="WorldScroll"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="GateBanner" type="Label" parent="."]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 24.0
-offset_top = 232.0
-offset_right = -24.0
-offset_bottom = 272.0
-grow_horizontal = 2
-theme_override_font_sizes/font_size = 19
-text = "MYTHORIA WORLD PROGRESSION GRAPH"
-horizontal_alignment = 1
-
-[node name="StagePanel" type="CenterContainer" parent="."]
+[node name="PedestalLabel" type="Label" parent="UI/Root/HeroPedestalControls/PedestalBadge"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = 282.0
-offset_right = -24.0
-offset_bottom = -24.0
+theme_override_colors/font_color = Color(1, 0.88, 0.28, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.04, 0.12, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 16
+text = "♛ MYTHORIA games — By ahmed\nW1 STAGE 1 • Goal <= 59s"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NextSkinBtn" type="Button" parent="UI/Root/HeroPedestalControls"]
+custom_minimum_size = Vector2(58, 58)
+layout_mode = 2
+text = "▶"
+
+[node name="DrawerModal" type="Panel" parent="UI/Root"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 44.0
+offset_top = 96.0
+offset_right = -44.0
+offset_bottom = -26.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="StagesRow" type="HBoxContainer" parent="StagePanel"]
-layout_mode = 2
-theme_override_constants/separation = 16
+[node name="DrawerHeader" type="HBoxContainer" parent="UI/Root/DrawerModal"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 14.0
+offset_right = -20.0
+offset_bottom = 68.0
+grow_horizontal = 2
+theme_override_constants/separation = 14
 
-[connection signal="pressed" from="TopBar/ModeButton" to="." method="_on_mode_button_pressed"]
-[connection signal="pressed" from="TopBar/QuickPlayButton" to="." method="_on_quick_play_pressed"]
-[connection signal="pressed" from="NavBar/PlayNavButton" to="." method="_on_quick_play_pressed"]
-[connection signal="pressed" from="NavBar/WorldsNavButton" to="." method="_on_worlds_tab_pressed"]
-[connection signal="pressed" from="NavBar/CharactersNavButton" to="." method="_on_characters_tab_pressed"]
-[connection signal="pressed" from="NavBar/MissionsNavButton" to="." method="_on_missions_tab_pressed"]
-[connection signal="pressed" from="NavBar/ShopNavButton" to="." method="_on_shop_tab_pressed"]
-[connection signal="pressed" from="NavBar/SettingsNavButton" to="." method="_on_settings_tab_pressed"]
+[node name="DrawerTitle" type="Label" parent="UI/Root/DrawerModal/DrawerHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.86, 0.24, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.14, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 24
+text = "🌍 WORLD SELECT & PROGRESSION GRAPH"
+vertical_alignment = 1
+
+[node name="CloseDrawerBtn" type="Button" parent="UI/Root/DrawerModal/DrawerHeader"]
+custom_minimum_size = Vector2(120, 48)
+layout_mode = 2
+text = "✖ CLOSE"
+
+[node name="WorldScroll" type="ScrollContainer" parent="UI/Root/DrawerModal"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 74.0
+offset_right = -20.0
+offset_bottom = 162.0
+grow_horizontal = 2
+vertical_scroll_mode = 0
+
+[node name="WorldList" type="HBoxContainer" parent="UI/Root/DrawerModal/WorldScroll"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="WorldRulesLabel" type="Label" parent="UI/Root/DrawerModal"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 166.0
+offset_right = -20.0
+offset_bottom = 202.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.35, 0.96, 0.72, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 16
+text = "Complete Stage 5 within its Goal Time to unlock the next World!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ContentScroll" type="ScrollContainer" parent="UI/Root/DrawerModal"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_top = 208.0
+offset_right = -22.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="StageGrid" type="HBoxContainer" parent="UI/Root/DrawerModal/ContentScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+alignment = 1
+
+[connection signal="pressed" from="UI/Root/TopRightBar/CoinsBadge" to="." method="_on_shop_tab_pressed"]
+[connection signal="pressed" from="UI/Root/TopRightBar/StarsBadge" to="." method="_on_worlds_tab_pressed"]
+[connection signal="pressed" from="UI/Root/TopRightBar/ModeButton" to="." method="_on_mode_button_pressed"]
+[connection signal="pressed" from="UI/Root/LeftQuickDock/MissionsQuickBtn" to="." method="_on_missions_tab_pressed"]
+[connection signal="pressed" from="UI/Root/LeftQuickDock/DailyGiftQuickBtn" to="." method="_on_daily_gift_pressed"]
+[connection signal="pressed" from="UI/Root/LeftQuickDock/WorldGraphQuickBtn" to="." method="_on_worlds_tab_pressed"]
+[connection signal="pressed" from="UI/Root/RightMainDock/BigPlayButton" to="." method="_on_play_button_pressed"]
+[connection signal="pressed" from="UI/Root/RightMainDock/LevelsButton" to="." method="_on_worlds_tab_pressed"]
+[connection signal="pressed" from="UI/Root/RightMainDock/CharactersButton" to="." method="_on_characters_tab_pressed"]
+[connection signal="pressed" from="UI/Root/RightMainDock/ShopButton" to="." method="_on_shop_tab_pressed"]
+[connection signal="pressed" from="UI/Root/RightMainDock/SettingsButton" to="." method="_on_settings_tab_pressed"]
+[connection signal="pressed" from="UI/Root/HeroPedestalControls/PrevSkinBtn" to="." method="_on_prev_skin_pressed"]
+[connection signal="pressed" from="UI/Root/HeroPedestalControls/NextSkinBtn" to="." method="_on_next_skin_pressed"]
+[connection signal="pressed" from="UI/Root/DrawerModal/DrawerHeader/CloseDrawerBtn" to="." method="_on_close_drawer_pressed"]
