@@ -158,22 +158,22 @@ text = "MODE: CAREER"
 layout_mode = 0
 offset_left = 18.0
 offset_top = 135.0
-offset_right = 188.0
+offset_right = 212.0
 offset_bottom = 445.0
 theme_override_constants/separation = 14
 
 [node name="MissionsQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
-custom_minimum_size = Vector2(165, 68)
+custom_minimum_size = Vector2(190, 68)
 layout_mode = 2
 text = "🏆 Missions"
 
 [node name="DailyGiftQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
-custom_minimum_size = Vector2(165, 68)
+custom_minimum_size = Vector2(190, 68)
 layout_mode = 2
 text = "🎁 Daily Gift"
 
 [node name="WorldGraphQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
-custom_minimum_size = Vector2(165, 68)
+custom_minimum_size = Vector2(190, 68)
 layout_mode = 2
 text = "⚡ World Graph"
 

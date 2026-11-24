@@ -2,10 +2,10 @@ extends Control
 
 ## MYTHORIA games — By ahmed
 ## 8-second Mythological Greek Temple & Golden Crown Studio Intro + Interactive Loading Bar
-## Displays the official MYTHORIA games By ahmed artwork in full clarity with golden light sweep,
-## glowing particles, and animated cyan progress bar.
 
+const CVB := preload("res://scripts/character_visual_builder.gd")
 const TOTAL_DURATION: float = 8.0
+
 var elapsed: float = 0.0
 var chime_played: bool = false
 var sweep_played: bool = false
@@ -14,10 +14,11 @@ var particle_seeds: Array[Vector3] = []
 @onready var backdrop_art: TextureRect = $BackdropArt
 @onready var light_sweep: ColorRect = $LightSweep
 @onready var loading_frame: Panel = $LoadingBarFrame
-@onready var loading_fill: Panel = $LoadingBarFill
+@onready var loading_fill: Panel = $LoadingBarFrame/LoadingBarFill
 @onready var loading_label: Label = $LoadingBarFrame/LoadingLabel
 
 func _ready() -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
 	for i in range(42):
 		particle_seeds.append(Vector3(
 			fmod(float(i * 73 + 19), 100.0) / 100.0,
@@ -25,7 +26,7 @@ func _ready() -> void:
 			1.5 + float(i % 4) * 1.1
 		))
 
-	var frame_style := CharacterVisualBuilder.make_box_style(
+	var frame_style := CVB.make_box_style(
 		Color(0.04, 0.08, 0.18, 0.92),
 		Color(1.0, 0.82, 0.18, 1.0),
 		18,
@@ -34,7 +35,7 @@ func _ready() -> void:
 	)
 	loading_frame.add_theme_stylebox_override("panel", frame_style)
 
-	var fill_style := CharacterVisualBuilder.make_box_style(
+	var fill_style := CVB.make_box_style(
 		Color(0.0, 0.85, 1.0, 0.96),
 		Color(0.65, 0.96, 1.0, 1.0),
 		14,
@@ -52,13 +53,11 @@ func _process(delta: float) -> void:
 	elapsed += delta
 	queue_redraw()
 
-	# 0-1.5s: Smooth cinematic fade-in & subtle zoom of the official MYTHORIA games artwork
 	var reveal_alpha: float = clampf(elapsed / 1.1, 0.0, 1.0)
 	if elapsed > 7.4:
 		reveal_alpha = clampf((TOTAL_DURATION - elapsed) / 0.6, 0.0, 1.0)
 	backdrop_art.modulate = Color(1.0, 1.0, 1.0, reveal_alpha)
 
-	# 2-4s: Golden light sweep across the MYTHORIA games crest
 	if elapsed >= 1.8 and not sweep_played:
 		sweep_played = true
 		AudioSynth.play_sfx("sweep")
@@ -67,12 +66,10 @@ func _process(delta: float) -> void:
 	light_sweep.position.x = lerpf(-280.0, 1480.0, sweep_t)
 	light_sweep.modulate.a = sin(sweep_t * PI) * 0.75
 
-	# 5.5s: Royal completion chime
 	if elapsed >= 5.2 and not chime_played:
 		chime_played = true
 		AudioSynth.play_sfx("victory")
 
-	# Interactive progress bar (0% -> 100%)
 	var pct: int = clampi(int((elapsed / 7.3) * 100.0), 0, 100)
 	var max_fill_w: float = loading_frame.size.x - 12.0
 	loading_fill.size.x = maxf(18.0, max_fill_w * (float(pct) / 100.0))

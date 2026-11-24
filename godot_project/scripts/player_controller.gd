@@ -3,7 +3,8 @@ extends CharacterBody3D
 ## MYTHORIA games — By ahmed
 ## DON'T FALL 3D Character Controller with Full 3D Stylized Cartoon Character Mesh,
 ## Procedural Limb Animation, and Independent Checkpoint & Portal Respawn State.
-## Supports both local human player ("player_0") and independent AI/multiplayer racers ("rival_1".."rival_4").
+
+const CVB := preload("res://scripts/character_visual_builder.gd")
 
 signal checkpoint_reached(player_id: String, checkpoint_index: int)
 signal individual_respawn_started(player_id: String, checkpoint_index: int, respawn_pos: Vector3)
@@ -58,7 +59,7 @@ func _ensure_character_visual() -> void:
 	var existing: Node3D = get_node_or_null("VisualRoot")
 	if is_instance_valid(existing):
 		existing.queue_free()
-	visual_root = CharacterVisualBuilder.build_character_visual(character_skin_id)
+	visual_root = CVB.build_character_visual(character_skin_id)
 	visual_root.rotation.y = deg_to_rad(safe_respawn_yaw_deg)
 	add_child(visual_root)
 
@@ -96,9 +97,6 @@ func initialize_spawn(start_pos: Vector3, start_yaw_deg: float = 180.0) -> void:
 	if is_instance_valid(visual_root):
 		visual_root.rotation.y = deg_to_rad(start_yaw_deg)
 
-## Strictly ordered checkpoint activation:
-## Only activates if checkpoint_index == last_activated_checkpoint + 1.
-## Moving backward to an earlier checkpoint never overwrites higher checkpoint progress.
 func try_activate_checkpoint(cp_index: int, cp_safe_pos: Vector3, cp_safe_yaw_deg: float = 180.0) -> bool:
 	if cp_index != last_activated_checkpoint + 1:
 		return false
@@ -138,9 +136,6 @@ func request_dash() -> void:
 	if player_id == "player_0":
 		AudioSynth.play_sfx("dash")
 
-## Individual Non-Blocking Respawn:
-## Respawns ONLY this specific player at their latest activated checkpoint.
-## Never resets the match, never teleports other players, and never interrupts moving platforms/obstacles.
 func respawn_at_checkpoint() -> void:
 	global_position = safe_respawn_pos
 	velocity = Vector3.ZERO
@@ -184,7 +179,7 @@ func _physics_process(delta: float) -> void:
 	if finished:
 		if is_instance_valid(visual_root):
 			visual_root.rotation.y += delta * 1.6
-			CharacterVisualBuilder.animate_character(visual_root, anim_clock, Vector3.ZERO, true, 0.0, true)
+			CVB.animate_character(visual_root, anim_clock, Vector3.ZERO, true, 0.0, true)
 		return
 
 	if is_on_floor():
@@ -233,6 +228,6 @@ func _physics_process(delta: float) -> void:
 
 	if is_instance_valid(visual_root):
 		visual_root.scale = visual_root.scale.lerp(Vector3.ONE, 12.0 * delta)
-		CharacterVisualBuilder.animate_character(visual_root, anim_clock, velocity, is_on_floor(), dive_timer, finished)
+		CVB.animate_character(visual_root, anim_clock, velocity, is_on_floor(), dive_timer, finished)
 
 	move_and_slide()

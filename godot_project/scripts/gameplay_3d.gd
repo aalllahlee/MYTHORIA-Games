@@ -5,6 +5,7 @@ extends Node3D
 ## Articulated 3D Cartoon Characters, 3D Striped Mallet Obstacles, Floating Sky Islands,
 ## On-Screen Virtual Joystick, and Independent Multi-Racer Respawn System.
 
+const CVB := preload("res://scripts/character_visual_builder.gd")
 const CheckpointScene := preload("res://scenes/checkpoint_3d.tscn")
 const PlayerScript := preload("res://scripts/player_controller.gd")
 
@@ -54,6 +55,7 @@ var joy_center: Vector2 = Vector2(133.0, 587.0)
 var can_advance_next: bool = false
 
 func _ready() -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
 	level_number = GameState.current_level_number
 	world_id = int((level_number - 1) / 5) + 1
 	result_panel.visible = false
@@ -71,37 +73,37 @@ func _ready() -> void:
 func _apply_hud_styles() -> void:
 	top_bar_panel.add_theme_stylebox_override(
 		"panel",
-		CharacterVisualBuilder.make_box_style(Color(0.05, 0.11, 0.28, 0.88), Color(1.0, 0.82, 0.18), 16, 3, 6)
+		CVB.make_box_style(Color(0.05, 0.11, 0.28, 0.88), Color(1.0, 0.82, 0.18), 16, 3, 6)
 	)
 	race_progress_frame.add_theme_stylebox_override(
 		"panel",
-		CharacterVisualBuilder.make_box_style(Color(0.04, 0.09, 0.22, 0.90), Color(1.0, 0.82, 0.18), 13, 2, 4)
+		CVB.make_box_style(Color(0.04, 0.09, 0.22, 0.90), Color(1.0, 0.82, 0.18), 13, 2, 4)
 	)
 	race_progress_fill.add_theme_stylebox_override(
 		"panel",
-		CharacterVisualBuilder.make_box_style(Color(0.18, 0.92, 0.45, 0.95), Color(0.65, 1.0, 0.78), 10, 1, 2)
+		CVB.make_box_style(Color(0.18, 0.92, 0.45, 0.95), Color(0.65, 1.0, 0.78), 10, 1, 2)
 	)
 	joystick_base.add_theme_stylebox_override(
 		"panel",
-		CharacterVisualBuilder.make_box_style(Color(0.10, 0.22, 0.52, 0.52), Color(0.55, 0.82, 1.0, 0.85), 85, 4, 6)
+		CVB.make_box_style(Color(0.10, 0.22, 0.52, 0.52), Color(0.55, 0.82, 1.0, 0.85), 85, 4, 6)
 	)
 	joystick_knob.add_theme_stylebox_override(
 		"panel",
-		CharacterVisualBuilder.make_box_style(Color(0.32, 0.58, 0.98, 0.92), Color(1.0, 0.92, 0.48, 0.98), 38, 3, 4)
+		CVB.make_box_style(Color(0.32, 0.58, 0.98, 0.92), Color(1.0, 0.92, 0.48, 0.98), 38, 3, 4)
 	)
 	result_panel.add_theme_stylebox_override(
 		"panel",
-		CharacterVisualBuilder.make_box_style(Color(0.04, 0.09, 0.25, 0.96), Color(1.0, 0.82, 0.18), 22, 4, 12)
+		CVB.make_box_style(Color(0.04, 0.09, 0.25, 0.96), Color(1.0, 0.82, 0.18), 22, 4, 12)
 	)
 
-	CharacterVisualBuilder.style_button(menu_btn, Color(0.12, 0.28, 0.65, 0.95), Color(0.55, 0.85, 1.0), Color.WHITE, 16, 14, 3)
-	CharacterVisualBuilder.style_button(jump_btn, Color(0.16, 0.48, 0.88, 0.92), Color(0.68, 0.92, 1.0), Color.WHITE, 18, 52, 4)
-	CharacterVisualBuilder.style_button(dive_btn, Color(0.20, 0.38, 0.78, 0.92), Color(0.68, 0.88, 1.0), Color.WHITE, 18, 52, 4)
-	CharacterVisualBuilder.style_button(dash_btn, Color(0.14, 0.32, 0.72, 0.92), Color(1.0, 0.84, 0.22), Color(1.0, 0.92, 0.38), 18, 52, 4)
+	CVB.style_button(menu_btn, Color(0.12, 0.28, 0.65, 0.95), Color(0.55, 0.85, 1.0), Color.WHITE, 16, 14, 3)
+	CVB.style_button(jump_btn, Color(0.16, 0.48, 0.88, 0.92), Color(0.68, 0.92, 1.0), Color.WHITE, 18, 52, 4)
+	CVB.style_button(dive_btn, Color(0.20, 0.38, 0.78, 0.92), Color(0.68, 0.88, 1.0), Color.WHITE, 18, 52, 4)
+	CVB.style_button(dash_btn, Color(0.14, 0.32, 0.72, 0.92), Color(1.0, 0.84, 0.22), Color(1.0, 0.92, 0.38), 18, 52, 4)
 
-	CharacterVisualBuilder.style_button(retry_btn, Color(0.14, 0.34, 0.72, 0.96), Color(0.55, 0.85, 1.0), Color.WHITE, 18, 16, 3)
-	CharacterVisualBuilder.style_button(next_btn, Color(1.0, 0.68, 0.04, 0.98), Color(1.0, 0.94, 0.52), Color.WHITE, 18, 16, 3)
-	CharacterVisualBuilder.style_button(menu_result_btn, Color(0.22, 0.28, 0.48, 0.96), Color(0.65, 0.78, 0.96), Color.WHITE, 18, 16, 3)
+	CVB.style_button(retry_btn, Color(0.14, 0.34, 0.72, 0.96), Color(0.55, 0.85, 1.0), Color.WHITE, 18, 16, 3)
+	CVB.style_button(next_btn, Color(1.0, 0.68, 0.04, 0.98), Color(1.0, 0.94, 0.52), Color.WHITE, 18, 16, 3)
+	CVB.style_button(menu_result_btn, Color(0.22, 0.28, 0.48, 0.96), Color(0.65, 0.78, 0.96), Color.WHITE, 18, 16, 3)
 
 func build_3d_course() -> void:
 	var w_theme: Dictionary = GameState.get_world_theme(world_id)
@@ -109,7 +111,6 @@ func build_3d_course() -> void:
 	var sec_col: Color = w_theme["secondary"]
 	var acc_col: Color = w_theme["accent"]
 
-	# Start Island with Twin Golden Fire Braziers (Checkpoint 0 / Start Sanctuary)
 	spawn_platform(Vector3(0.0, 0.0, 0.0), Vector3(8.4, 1.4, 8.2), prim_col)
 	spawn_brazier_pillar(Vector3(-3.4, 0.7, -2.5))
 	spawn_brazier_pillar(Vector3(3.4, 0.7, -2.5))
@@ -127,7 +128,6 @@ func build_3d_course() -> void:
 		Color(0.14, 0.82, 0.52)
 	]
 
-	# Course layout: START -> CHECKPOINT 1 -> CHECKPOINT 2 -> CHECKPOINT 3 -> CHECKPOINT 4 -> FINAL PLATFORM -> FINISH LINE
 	for seg in range(seg_count):
 		var col: Color = block_palette[seg % block_palette.size()]
 		if seg % 3 == 1:
@@ -138,7 +138,6 @@ func build_3d_course() -> void:
 		if seg % 2 == 1:
 			spawn_rotating_hammer(Vector3(0.0, 0.65, cur_z - 4.5), acc_col, 1.8 + float(level_number) * 0.04)
 
-		# Spawn scenic floating temple islands & clouds on the sides
 		if seg % 2 == 0:
 			var side_dir: float = -1.0 if (seg % 4 == 0) else 1.0
 			spawn_scenic_floating_island(Vector3(side_dir * 13.5, 0.5, cur_z - 4.5), prim_col, acc_col)
@@ -169,7 +168,7 @@ func spawn_brazier_pillar(pos: Vector3) -> void:
 	var pillar := MeshInstance3D.new()
 	var pm := BoxMesh.new()
 	pm.size = Vector3(0.85, 1.1, 0.85)
-	pm.material = CharacterVisualBuilder.make_mat(Color(0.95, 0.96, 1.0), 0.35, 0.08)
+	pm.material = CVB.make_mat(Color(0.95, 0.96, 1.0), 0.35, 0.08)
 	pillar.mesh = pm
 	pillar.position = pos
 	track_root.add_child(pillar)
@@ -178,7 +177,7 @@ func spawn_brazier_pillar(pos: Vector3) -> void:
 	var fm := SphereMesh.new()
 	fm.radius = 0.34
 	fm.height = 0.68
-	fm.material = CharacterVisualBuilder.make_mat(Color(1.0, 0.62, 0.08), 0.15, 0.10, Color(1.0, 0.58, 0.08), 2.5)
+	fm.material = CVB.make_mat(Color(1.0, 0.62, 0.08), 0.15, 0.10, Color(1.0, 0.58, 0.08), 2.5)
 	flame.mesh = fm
 	flame.position = pos + Vector3(0.0, 0.82, 0.0)
 	track_root.add_child(flame)
@@ -193,7 +192,7 @@ func spawn_scenic_floating_island(pos: Vector3, prim_col: Color, acc_col: Color)
 	rm.top_radius = 4.2
 	rm.bottom_radius = 1.8
 	rm.height = 3.2
-	rm.material = CharacterVisualBuilder.make_mat(Color(0.55, 0.43, 0.34), 0.65, 0.04)
+	rm.material = CVB.make_mat(Color(0.55, 0.43, 0.34), 0.65, 0.04)
 	rock.mesh = rm
 	rock.position = Vector3(0.0, -1.2, 0.0)
 	island.add_child(rock)
@@ -203,18 +202,17 @@ func spawn_scenic_floating_island(pos: Vector3, prim_col: Color, acc_col: Color)
 	gm.top_radius = 4.4
 	gm.bottom_radius = 4.2
 	gm.height = 0.55
-	gm.material = CharacterVisualBuilder.make_mat(prim_col.lightened(0.12), 0.45, 0.05)
+	gm.material = CVB.make_mat(prim_col.lightened(0.12), 0.45, 0.05)
 	top_grass.mesh = gm
 	top_grass.position = Vector3(0.0, 0.6, 0.0)
 	island.add_child(top_grass)
 
-	# Temple tower + golden roof
 	var tower := MeshInstance3D.new()
 	var tm := CylinderMesh.new()
 	tm.top_radius = 1.2
 	tm.bottom_radius = 1.35
 	tm.height = 2.8
-	tm.material = CharacterVisualBuilder.make_mat(Color(0.95, 0.96, 1.0), 0.35, 0.08)
+	tm.material = CVB.make_mat(Color(0.95, 0.96, 1.0), 0.35, 0.08)
 	tower.mesh = tm
 	tower.position = Vector3(0.0, 2.2, 0.0)
 	island.add_child(tower)
@@ -224,7 +222,7 @@ func spawn_scenic_floating_island(pos: Vector3, prim_col: Color, acc_col: Color)
 	rfm.top_radius = 0.05
 	rfm.bottom_radius = 1.65
 	rfm.height = 1.6
-	rfm.material = CharacterVisualBuilder.make_mat(acc_col, 0.25, 0.78)
+	rfm.material = CVB.make_mat(acc_col, 0.25, 0.78)
 	roof.mesh = rfm
 	roof.position = Vector3(0.0, 4.3, 0.0)
 	island.add_child(roof)
@@ -276,15 +274,14 @@ func spawn_platform(pos: Vector3, sz: Vector3, col: Color) -> void:
 	var mesh_inst := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = sz
-	mesh.material = CharacterVisualBuilder.make_mat(col, 0.38, 0.08)
+	mesh.material = CVB.make_mat(col, 0.38, 0.08)
 	mesh_inst.mesh = mesh
 	body.add_child(mesh_inst)
 
-	# Glossy top bevel trim plate
 	var top_trim := MeshInstance3D.new()
 	var top_mesh := BoxMesh.new()
 	top_mesh.size = Vector3(sz.x - 0.35, 0.14, sz.z - 0.35)
-	top_mesh.material = CharacterVisualBuilder.make_mat(col.lightened(0.22), 0.25, 0.12)
+	top_mesh.material = CVB.make_mat(col.lightened(0.22), 0.25, 0.12)
 	top_trim.mesh = top_mesh
 	top_trim.position = Vector3(0.0, sz.y * 0.5 + 0.03, 0.0)
 	body.add_child(top_trim)
@@ -303,14 +300,14 @@ func spawn_moving_platform(pos: Vector3, sz: Vector3, col: Color, amp_x: float, 
 	var mesh_inst := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = sz
-	mesh.material = CharacterVisualBuilder.make_mat(col, 0.34, 0.14)
+	mesh.material = CVB.make_mat(col, 0.34, 0.14)
 	mesh_inst.mesh = mesh
 	body.add_child(mesh_inst)
 
 	var top_trim := MeshInstance3D.new()
 	var top_mesh := BoxMesh.new()
 	top_mesh.size = Vector3(sz.x - 0.35, 0.14, sz.z - 0.35)
-	top_mesh.material = CharacterVisualBuilder.make_mat(col.lightened(0.25), 0.22, 0.18)
+	top_mesh.material = CVB.make_mat(col.lightened(0.25), 0.22, 0.18)
 	top_trim.mesh = top_mesh
 	top_trim.position = Vector3(0.0, sz.y * 0.5 + 0.03, 0.0)
 	body.add_child(top_trim)
@@ -322,29 +319,26 @@ func spawn_rotating_hammer(pos: Vector3, col: Color, spd: float) -> void:
 	var pivot := Node3D.new()
 	pivot.position = pos
 
-	# Central golden hub pedestal
 	var hub := MeshInstance3D.new()
 	var hub_mesh := CylinderMesh.new()
 	hub_mesh.top_radius = 0.45
 	hub_mesh.bottom_radius = 0.58
 	hub_mesh.height = 1.45
-	hub_mesh.material = CharacterVisualBuilder.make_mat(Color(1.0, 0.82, 0.18), 0.25, 0.80)
+	hub_mesh.material = CVB.make_mat(Color(1.0, 0.82, 0.18), 0.25, 0.80)
 	hub.mesh = hub_mesh
 	hub.position = Vector3(0.0, 0.45, 0.0)
 	pivot.add_child(hub)
 
-	# Crossbar arm
 	var bar := MeshInstance3D.new()
 	var bar_mesh := BoxMesh.new()
 	bar_mesh.size = Vector3(5.6, 0.34, 0.34)
-	bar_mesh.material = CharacterVisualBuilder.make_mat(col, 0.30, 0.50)
+	bar_mesh.material = CVB.make_mat(col, 0.30, 0.50)
 	bar.mesh = bar_mesh
 	bar.position = Vector3(0.0, 0.65, 0.0)
 	pivot.add_child(bar)
 
-	# Striped Red & White Mallet Heads at both ends (like the reference image!)
-	var red_mat := CharacterVisualBuilder.make_mat(Color(0.94, 0.18, 0.22), 0.32, 0.12)
-	var white_mat := CharacterVisualBuilder.make_mat(Color(0.98, 0.98, 1.0), 0.30, 0.08)
+	var red_mat := CVB.make_mat(Color(0.94, 0.18, 0.22), 0.32, 0.12)
+	var white_mat := CVB.make_mat(Color(0.98, 0.98, 1.0), 0.30, 0.08)
 	for side in [-1.0, 1.0]:
 		var mallet := MeshInstance3D.new()
 		var m_cyl := CylinderMesh.new()
@@ -377,7 +371,7 @@ func spawn_coin(pos: Vector3) -> void:
 	cyl.top_radius = 0.44
 	cyl.bottom_radius = 0.44
 	cyl.height = 0.16
-	var mat := CharacterVisualBuilder.make_mat(Color(1.0, 0.84, 0.16), 0.20, 0.85, Color(1.0, 0.76, 0.10), 0.35)
+	var mat := CVB.make_mat(Color(1.0, 0.84, 0.16), 0.20, 0.85, Color(1.0, 0.76, 0.10), 0.35)
 	cyl.material = mat
 	c.mesh = cyl
 	c.position = pos
@@ -392,7 +386,7 @@ func spawn_finish_arch(pos: Vector3, col: Color) -> void:
 		p_mesh.top_radius = 0.42
 		p_mesh.bottom_radius = 0.46
 		p_mesh.height = 4.8
-		p_mesh.material = CharacterVisualBuilder.make_mat(Color(0.95, 0.97, 1.0), 0.32, 0.10)
+		p_mesh.material = CVB.make_mat(Color(0.95, 0.97, 1.0), 0.32, 0.10)
 		pillar.mesh = p_mesh
 		pillar.position = pos + Vector3(side, 2.4, 0.0)
 		track_root.add_child(pillar)
@@ -400,18 +394,17 @@ func spawn_finish_arch(pos: Vector3, col: Color) -> void:
 	var beam := MeshInstance3D.new()
 	var b_mesh := BoxMesh.new()
 	b_mesh.size = Vector3(8.2, 0.90, 0.90)
-	b_mesh.material = CharacterVisualBuilder.make_mat(col, 0.22, 0.82, Color(1.0, 0.78, 0.15), 0.3)
+	b_mesh.material = CVB.make_mat(col, 0.22, 0.82, Color(1.0, 0.78, 0.15), 0.3)
 	beam.mesh = b_mesh
 	beam.position = pos + Vector3(0.0, 5.0, 0.0)
 	track_root.add_child(beam)
 
-	# Golden Crown atop the Finish Arch
 	var crown := MeshInstance3D.new()
 	var cr_mesh := CylinderMesh.new()
 	cr_mesh.top_radius = 0.85
 	cr_mesh.bottom_radius = 0.68
 	cr_mesh.height = 0.75
-	cr_mesh.material = CharacterVisualBuilder.make_mat(Color(1.0, 0.84, 0.16), 0.20, 0.88, Color(1.0, 0.78, 0.12), 0.5)
+	cr_mesh.material = CVB.make_mat(Color(1.0, 0.84, 0.16), 0.20, 0.88, Color(1.0, 0.78, 0.12), 0.5)
 	crown.mesh = cr_mesh
 	crown.position = pos + Vector3(0.0, 5.8, 0.0)
 	track_root.add_child(crown)
@@ -419,7 +412,7 @@ func spawn_finish_arch(pos: Vector3, col: Color) -> void:
 	var portal := MeshInstance3D.new()
 	var port_mesh := BoxMesh.new()
 	port_mesh.size = Vector3(5.8, 4.2, 0.14)
-	port_mesh.material = CharacterVisualBuilder.make_mat(Color(0.0, 0.88, 1.0, 0.55), 0.15, 0.20, Color(0.0, 0.75, 1.0), 1.4)
+	port_mesh.material = CVB.make_mat(Color(0.0, 0.88, 1.0, 0.55), 0.15, 0.20, Color(0.0, 0.75, 1.0), 1.4)
 	portal.mesh = port_mesh
 	portal.position = pos + Vector3(0.0, 2.3, 0.0)
 	track_root.add_child(portal)
@@ -468,12 +461,10 @@ func _process(delta: float) -> void:
 	if checkpoint_banner_timer > 0.0:
 		checkpoint_banner_timer = maxf(0.0, checkpoint_banner_timer - delta)
 
-	# Update moving platforms continuously (never interrupted when any player respawns)
 	for mp in moving_platforms:
 		var body: AnimatableBody3D = mp["node"]
 		body.position.x = float(mp["base_x"]) + sin(elapsed_sec * float(mp["speed"])) * float(mp["amp_x"])
 
-	# Rotate obstacle hammers and check knockback for all racers
 	for h in hammers:
 		var node: Node3D = h["node"]
 		node.rotation.y += float(h["speed"]) * speed_multiplier * delta
@@ -485,10 +476,8 @@ func _process(delta: float) -> void:
 				r.velocity.z = 7.2
 				r.velocity.y = 5.2
 
-	# Update AI Rivals independently
 	_update_ai_rivals(delta)
 
-	# Collect coins
 	for c in coin_nodes:
 		if is_instance_valid(c) and c.visible:
 			c.rotation.y += delta * 3.2
@@ -497,17 +486,14 @@ func _process(delta: float) -> void:
 				coins_collected += 1
 				AudioSynth.play_sfx("coin")
 
-	# Follow camera smoothly
 	var target_cam_pos: Vector3 = player.global_position + Vector3(0.0, 4.4, 7.6).rotated(Vector3.UP, deg_to_rad(player.camera_yaw_deg))
 	camera_rig.global_position = camera_rig.global_position.lerp(target_cam_pos, delta * 8.0)
 	camera_3d.look_at(player.global_position + Vector3(0.0, 1.15, -1.8), Vector3.UP)
 
-	# Update Race Progress Bar
 	var prog_ratio: float = clampf((1.5 - player.global_position.z) / maxf(10.0, 1.5 - finish_z), 0.0, 1.0)
 	if is_instance_valid(race_progress_fill):
 		race_progress_fill.size.x = maxf(16.0, 412.0 * prog_ratio)
 
-	# Update HUD timer, checkpoint badge & goal pace
 	var elapsed_ms: int = int(elapsed_sec * 1000.0)
 	var goal_ms: int = GameState.goal_time_ms_for_level(level_number)
 	hud_level_label.text = "👑 W%d STAGE %d  |  CP %d/%d" % [world_id, level_number, player.last_activated_checkpoint, total_checkpoints]
@@ -523,12 +509,9 @@ func _process(delta: float) -> void:
 		hud_goal_banner.text = "PROGRESSION GOAL: Reach Finish within <= %ds to unlock next stage/world!" % goal_sec
 		hud_goal_banner.modulate = Color(1.0, 0.86, 0.22)
 
-	# Individual Fall Detection for Local Player ("player_0"):
-	# Respawns ONLY player_0 at their latest activated checkpoint without interrupting rivals or timers!
 	if player.global_position.y < void_floor_y or absf(player.global_position.x) > 45.0:
 		player.respawn_at_checkpoint()
 
-	# Check finish arch
 	if player.global_position.z <= finish_z + 2.2:
 		complete_level(elapsed_ms)
 
@@ -544,8 +527,6 @@ func _update_ai_rivals(delta: float) -> void:
 		if r.is_on_floor() and fmod(elapsed_sec + float(r.get_index()) * 0.47, 1.8) < 0.08:
 			r.request_jump()
 
-		# Individual Fall Detection for this specific AI Rival:
-		# Respawns ONLY this rival at their own latest activated checkpoint!
 		if r.global_position.y < void_floor_y or absf(r.global_position.x) > 45.0:
 			r.respawn_at_checkpoint()
 

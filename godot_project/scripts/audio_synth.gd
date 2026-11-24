@@ -1,5 +1,8 @@
 extends Node
 
+## MYTHORIA games — By ahmed
+## Procedural Sound Effects Synthesizer (100% offline, zero external audio files required)
+
 var sfx_player: AudioStreamPlayer
 var mix_rate: float = 22050.0
 
@@ -8,7 +11,7 @@ func _ready() -> void:
 	add_child(sfx_player)
 
 func play_sfx(sfx_name: String) -> void:
-	if GameState.sfx_volume <= 0.01:
+	if not GameState.sound_enabled or GameState.sfx_volume <= 0.01:
 		return
 	var gen := AudioStreamGenerator.new()
 	gen.mix_rate = mix_rate
@@ -32,14 +35,16 @@ func play_sfx(sfx_name: String) -> void:
 			duration = 0.20; freq_start = 540.0; freq_end = 980.0
 		"coin":
 			duration = 0.14; freq_start = 880.0; freq_end = 1320.0
+		"checkpoint":
+			duration = 0.26; freq_start = 587.33; freq_end = 1174.66
 		"victory":
 			duration = 0.32; freq_start = 523.25; freq_end = 1046.5
 		"fail":
 			duration = 0.28; freq_start = 340.0; freq_end = 140.0
+		"sweep", "studio_sweep":
+			duration = 0.32; freq_start = 220.0; freq_end = 659.25
 		"studio_intro":
 			duration = 0.34; freq_start = 146.83; freq_end = 293.66
-		"studio_sweep":
-			duration = 0.32; freq_start = 110.0; freq_end = 659.25
 		"studio_complete":
 			duration = 0.34; freq_start = 293.66; freq_end = 880.0
 		_:
