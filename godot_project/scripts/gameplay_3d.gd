@@ -2,8 +2,9 @@ extends Node3D
 
 ## MYTHORIA games — By ahmed
 ## DON'T FALL 3D Gameplay Scene with 4 Ordered Mythoria Sanctuary Checkpoints,
-## Articulated 3D Cartoon Characters, 3D Striped Mallet Obstacles, Floating Sky Islands,
-## On-Screen Virtual Joystick, and Independent Multi-Racer Respawn System.
+## Articulated 3D Cartoon Characters, Multi-Touch Virtual Analog + Simultaneous Jump/Dive/Dash,
+## 3D Obstacles (Rotating Hammers, Swinging Pendulums, Bounce Pads, Speed Boosters),
+## Floating Sky Islands, and Independent Multi-Racer Respawn System.
 
 const CVB := preload("res://scripts/character_visual_builder.gd")
 const CheckpointScene := preload("res://scenes/checkpoint_3d.tscn")
@@ -46,11 +47,15 @@ var total_checkpoints: int = 4
 var checkpoint_banner_timer: float = 0.0
 var checkpoint_banner_text: String = ""
 var hammers: Array = []
+var pendulums: Array = []
 var moving_platforms: Array = []
+var bounce_pads: Array = []
+var speed_pads: Array = []
 var checkpoints: Array = []
 var rivals: Array = []
 var coin_nodes: Array = []
 var joy_touch_id: int = -1
+var cam_touch_id: int = -1
 var joy_center: Vector2 = Vector2(133.0, 587.0)
 var can_advance_next: bool = false
 
@@ -60,6 +65,7 @@ func _ready() -> void:
 	world_id = int((level_number - 1) / 5) + 1
 	result_panel.visible = false
 	_apply_hud_styles()
+	_connect_action_buttons()
 	player.player_id = "player_0"
 	player.is_ai_racer = false
 	player.character_skin_id = GameState.selected_skin_id
@@ -69,6 +75,18 @@ func _ready() -> void:
 	player.individual_respawn_started.connect(_on_racer_respawn_started)
 	build_3d_course()
 	spawn_ai_rivals()
+
+func _connect_action_buttons() -> void:
+	# Instant touch response on ACTION_MODE_BUTTON_PRESS + direct multi-touch detection in _input()
+	jump_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	dive_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	dash_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	if not jump_btn.button_down.is_connected(_on_jump_button_pressed):
+		jump_btn.button_down.connect(_on_jump_button_pressed)
+	if not dive_btn.button_down.is_connected(_on_dive_button_pressed):
+		dive_btn.button_down.connect(_on_dive_button_pressed)
+	if not dash_btn.button_down.is_connected(_on_dash_button_pressed):
+		dash_btn.button_down.connect(_on_dash_button_pressed)
 
 func _apply_hud_styles() -> void:
 	top_bar_panel.add_theme_stylebox_override(
@@ -85,11 +103,11 @@ func _apply_hud_styles() -> void:
 	)
 	joystick_base.add_theme_stylebox_override(
 		"panel",
-		CVB.make_box_style(Color(0.10, 0.22, 0.52, 0.52), Color(0.55, 0.82, 1.0, 0.85), 85, 4, 6)
+		CVB.make_box_style(Color(0.08, 0.20, 0.48, 0.58), Color(1.0, 0.84, 0.22, 0.92), 85, 4, 6)
 	)
 	joystick_knob.add_theme_stylebox_override(
 		"panel",
-		CVB.make_box_style(Color(0.32, 0.58, 0.98, 0.92), Color(1.0, 0.92, 0.48, 0.98), 38, 3, 4)
+		CVB.make_box_style(Color(0.18, 0.62, 1.0, 0.96), Color(1.0, 0.92, 0.48, 1.0), 38, 3, 4)
 	)
 	result_panel.add_theme_stylebox_override(
 		"panel",
@@ -97,9 +115,9 @@ func _apply_hud_styles() -> void:
 	)
 
 	CVB.style_button(menu_btn, Color(0.12, 0.28, 0.65, 0.95), Color(0.55, 0.85, 1.0), Color.WHITE, 16, 14, 3)
-	CVB.style_button(jump_btn, Color(0.16, 0.48, 0.88, 0.92), Color(0.68, 0.92, 1.0), Color.WHITE, 18, 52, 4)
-	CVB.style_button(dive_btn, Color(0.20, 0.38, 0.78, 0.92), Color(0.68, 0.88, 1.0), Color.WHITE, 18, 52, 4)
-	CVB.style_button(dash_btn, Color(0.14, 0.32, 0.72, 0.92), Color(1.0, 0.84, 0.22), Color(1.0, 0.92, 0.38), 18, 52, 4)
+	CVB.style_button(jump_btn, Color(0.14, 0.72, 0.36, 0.95), Color(0.68, 1.0, 0.78), Color.WHITE, 18, 52, 4)
+	CVB.style_button(dive_btn, Color(0.72, 0.18, 0.58, 0.95), Color(1.0, 0.72, 0.94), Color.WHITE, 18, 52, 4)
+	CVB.style_button(dash_btn, Color(0.08, 0.48, 0.88, 0.95), Color(1.0, 0.84, 0.22), Color(1.0, 0.94, 0.42), 18, 52, 4)
 
 	CVB.style_button(retry_btn, Color(0.14, 0.34, 0.72, 0.96), Color(0.55, 0.85, 1.0), Color.WHITE, 18, 16, 3)
 	CVB.style_button(next_btn, Color(1.0, 0.68, 0.04, 0.98), Color(1.0, 0.94, 0.52), Color.WHITE, 18, 16, 3)
@@ -130,17 +148,27 @@ func build_3d_course() -> void:
 
 	for seg in range(seg_count):
 		var col: Color = block_palette[seg % block_palette.size()]
+		var center_z: float = cur_z - 4.5
 		if seg % 3 == 1:
-			spawn_moving_platform(Vector3(0.0, 0.0, cur_z - 4.5), Vector3(6.4, 1.2, 8.6), col, 2.4, 1.25 + float(seg) * 0.1)
+			spawn_moving_platform(Vector3(0.0, 0.0, center_z), Vector3(6.4, 1.2, 8.6), col, 2.4, 1.25 + float(seg) * 0.1)
 		else:
-			spawn_platform(Vector3(0.0, 0.0, cur_z - 4.5), Vector3(7.2, 1.2, 9.0), col)
-		spawn_coin(Vector3(0.0, 1.55, cur_z - 4.5))
-		if seg % 2 == 1:
-			spawn_rotating_hammer(Vector3(0.0, 0.65, cur_z - 4.5), acc_col, 1.8 + float(level_number) * 0.04)
+			spawn_platform(Vector3(0.0, 0.0, center_z), Vector3(7.2, 1.2, 9.0), col)
+
+		spawn_coin(Vector3(0.0, 1.55, center_z))
+		spawn_coin(Vector3(-1.8, 1.55, center_z - 1.8))
+		spawn_coin(Vector3(1.8, 1.55, center_z + 1.8))
+
+		if seg % 3 == 0:
+			spawn_rotating_hammer(Vector3(0.0, 0.65, center_z), acc_col, 1.8 + float(level_number) * 0.04)
+		elif seg % 3 == 1:
+			spawn_swinging_pendulum(Vector3(0.0, 5.2, center_z), acc_col, 2.1 + float(seg) * 0.08)
+		else:
+			spawn_bounce_pad(Vector3(-1.8 if (seg % 2 == 0) else 1.8, 0.68, center_z + 1.4))
+			spawn_speed_pad(Vector3(0.0, 0.66, center_z - 1.6))
 
 		if seg % 2 == 0:
 			var side_dir: float = -1.0 if (seg % 4 == 0) else 1.0
-			spawn_scenic_floating_island(Vector3(side_dir * 13.5, 0.5, cur_z - 4.5), prim_col, acc_col)
+			spawn_scenic_floating_island(Vector3(side_dir * 13.5, 0.5, center_z), prim_col, acc_col)
 
 		cur_z -= 11.2
 
@@ -274,17 +302,28 @@ func spawn_platform(pos: Vector3, sz: Vector3, col: Color) -> void:
 	var mesh_inst := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = sz
-	mesh.material = CVB.make_mat(col, 0.38, 0.08)
+	mesh.material = CVB.make_mat(col, 0.34, 0.10)
 	mesh_inst.mesh = mesh
 	body.add_child(mesh_inst)
 
 	var top_trim := MeshInstance3D.new()
 	var top_mesh := BoxMesh.new()
 	top_mesh.size = Vector3(sz.x - 0.35, 0.14, sz.z - 0.35)
-	top_mesh.material = CVB.make_mat(col.lightened(0.22), 0.25, 0.12)
+	top_mesh.material = CVB.make_mat(col.lightened(0.22), 0.22, 0.14)
 	top_trim.mesh = top_mesh
 	top_trim.position = Vector3(0.0, sz.y * 0.5 + 0.03, 0.0)
 	body.add_child(top_trim)
+
+	# Golden side border rails for visual depth
+	var gold_rail_mat := CVB.make_mat(Color(1.0, 0.84, 0.20), 0.22, 0.78)
+	for side_dir in [-1, 1]:
+		var rail := MeshInstance3D.new()
+		var r_box := BoxMesh.new()
+		r_box.size = Vector3(0.16, 0.22, sz.z - 0.2)
+		r_box.material = gold_rail_mat
+		rail.mesh = r_box
+		rail.position = Vector3(float(side_dir) * (sz.x * 0.5 - 0.12), sz.y * 0.5 + 0.08, 0.0)
+		body.add_child(rail)
 
 	track_root.add_child(body)
 
@@ -300,7 +339,7 @@ func spawn_moving_platform(pos: Vector3, sz: Vector3, col: Color, amp_x: float, 
 	var mesh_inst := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = sz
-	mesh.material = CVB.make_mat(col, 0.34, 0.14)
+	mesh.material = CVB.make_mat(col, 0.32, 0.14)
 	mesh_inst.mesh = mesh
 	body.add_child(mesh_inst)
 
@@ -324,7 +363,7 @@ func spawn_rotating_hammer(pos: Vector3, col: Color, spd: float) -> void:
 	hub_mesh.top_radius = 0.45
 	hub_mesh.bottom_radius = 0.58
 	hub_mesh.height = 1.45
-	hub_mesh.material = CVB.make_mat(Color(1.0, 0.82, 0.18), 0.25, 0.80)
+	hub_mesh.material = CVB.make_mat(Color(1.0, 0.82, 0.18), 0.22, 0.82)
 	hub.mesh = hub_mesh
 	hub.position = Vector3(0.0, 0.45, 0.0)
 	pivot.add_child(hub)
@@ -332,14 +371,15 @@ func spawn_rotating_hammer(pos: Vector3, col: Color, spd: float) -> void:
 	var bar := MeshInstance3D.new()
 	var bar_mesh := BoxMesh.new()
 	bar_mesh.size = Vector3(5.6, 0.34, 0.34)
-	bar_mesh.material = CVB.make_mat(col, 0.30, 0.50)
+	bar_mesh.material = CVB.make_mat(col, 0.28, 0.52)
 	bar.mesh = bar_mesh
 	bar.position = Vector3(0.0, 0.65, 0.0)
 	pivot.add_child(bar)
 
-	var red_mat := CVB.make_mat(Color(0.94, 0.18, 0.22), 0.32, 0.12)
-	var white_mat := CVB.make_mat(Color(0.98, 0.98, 1.0), 0.30, 0.08)
-	for side in [-1.0, 1.0]:
+	var red_mat := CVB.make_mat(Color(0.94, 0.18, 0.22), 0.28, 0.15)
+	var white_mat := CVB.make_mat(Color(0.98, 0.98, 1.0), 0.25, 0.08)
+	for side_dir in [-1, 1]:
+		var sf: float = float(side_dir)
 		var mallet := MeshInstance3D.new()
 		var m_cyl := CylinderMesh.new()
 		m_cyl.top_radius = 0.48
@@ -347,7 +387,7 @@ func spawn_rotating_hammer(pos: Vector3, col: Color, spd: float) -> void:
 		m_cyl.height = 1.25
 		m_cyl.material = red_mat
 		mallet.mesh = m_cyl
-		mallet.position = Vector3(side * 2.65, 0.65, 0.0)
+		mallet.position = Vector3(sf * 2.65, 0.65, 0.0)
 		mallet.rotation.x = deg_to_rad(90.0)
 		pivot.add_child(mallet)
 
@@ -358,12 +398,87 @@ func spawn_rotating_hammer(pos: Vector3, col: Color, spd: float) -> void:
 		s_cyl.height = 0.42
 		s_cyl.material = white_mat
 		stripe.mesh = s_cyl
-		stripe.position = Vector3(side * 2.65, 0.65, 0.0)
+		stripe.position = Vector3(sf * 2.65, 0.65, 0.0)
 		stripe.rotation.x = deg_to_rad(90.0)
 		pivot.add_child(stripe)
 
 	track_root.add_child(pivot)
 	hammers.append({"node": pivot, "speed": spd})
+
+func spawn_swinging_pendulum(pos: Vector3, col: Color, spd: float) -> void:
+	var frame := Node3D.new()
+	frame.position = pos
+	track_root.add_child(frame)
+
+	var mat_gold := CVB.make_mat(Color(1.0, 0.82, 0.18), 0.20, 0.85)
+	var mat_blade := CVB.make_mat(Color(0.0, 0.88, 1.0), 0.18, 0.45, Color(0.0, 0.78, 1.0), 1.1)
+
+	# Overhead arch support pillars
+	for side_dir in [-1, 1]:
+		var p := MeshInstance3D.new()
+		var pm := CylinderMesh.new()
+		pm.top_radius = 0.22
+		pm.bottom_radius = 0.26
+		pm.height = 4.8
+		pm.material = mat_gold
+		p.mesh = pm
+		p.position = Vector3(float(side_dir) * 3.2, -2.2, 0.0)
+		frame.add_child(p)
+
+	var top_bar := MeshInstance3D.new()
+	var tb := BoxMesh.new()
+	tb.size = Vector3(6.8, 0.35, 0.35)
+	tb.material = mat_gold
+	top_bar.mesh = tb
+	frame.add_child(top_bar)
+
+	var swing_pivot := Node3D.new()
+	frame.add_child(swing_pivot)
+
+	var rod := MeshInstance3D.new()
+	var rm := CylinderMesh.new()
+	rm.top_radius = 0.10
+	rm.bottom_radius = 0.10
+	rm.height = 3.6
+	rm.material = mat_gold
+	rod.mesh = rm
+	rod.position = Vector3(0.0, -1.8, 0.0)
+	swing_pivot.add_child(rod)
+
+	var hammer_head := MeshInstance3D.new()
+	var hm := CylinderMesh.new()
+	hm.top_radius = 0.75
+	hm.bottom_radius = 0.75
+	hm.height = 1.4
+	hm.material = mat_blade
+	hammer_head.mesh = hm
+	hammer_head.position = Vector3(0.0, -3.6, 0.0)
+	hammer_head.rotation.x = deg_to_rad(90.0)
+	swing_pivot.add_child(hammer_head)
+
+	pendulums.append({"pivot": swing_pivot, "head": hammer_head, "speed": spd, "phase": pos.z * 0.2})
+
+func spawn_bounce_pad(pos: Vector3) -> void:
+	var pad := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.95
+	cyl.bottom_radius = 1.08
+	cyl.height = 0.24
+	cyl.material = CVB.make_mat(Color(1.0, 0.22, 0.58), 0.18, 0.35, Color(1.0, 0.18, 0.55), 1.4)
+	pad.mesh = cyl
+	pad.position = pos
+	track_root.add_child(pad)
+	bounce_pads.append(pad)
+
+func spawn_speed_pad(pos: Vector3) -> void:
+	var pad := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(2.2, 0.12, 2.6)
+	box.material = CVB.make_mat(Color(0.0, 0.92, 1.0), 0.15, 0.40, Color(0.0, 0.85, 1.0), 1.8)
+	pad.mesh = box
+	pad.position = pos
+	track_root.add_child(pad)
+	speed_pads.append(pad)
 
 func spawn_coin(pos: Vector3) -> void:
 	var c := MeshInstance3D.new()
@@ -431,24 +546,59 @@ func _on_racer_respawn_started(pid: String, cp_index: int, _respawn_pos: Vector3
 		else:
 			checkpoint_banner_text = "⚡ RESPAWNED AT START SANCTUARY"
 
+## MULTI-TOUCH INPUT SYSTEM:
+## Finger 1 can hold and drag the Virtual Analog Joystick while Finger 2 simultaneously taps
+## JUMP, DIVE, or DASH (or drags the upper-right screen to orbit the 3D camera)!
 func _input(event: InputEvent) -> void:
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var half_w: float = maxf(500.0, vp_size.x * 0.45)
+
 	if event is InputEventScreenTouch:
-		if event.pressed and event.position.x < 520.0 and event.position.y > 320.0:
-			joy_touch_id = event.index
-			joy_center = event.position
-		elif not event.pressed and event.index == joy_touch_id:
-			joy_touch_id = -1
-			player.joy_input = Vector2.ZERO
-			if is_instance_valid(joystick_knob):
-				joystick_knob.position = Vector2(47.0, 47.0)
+		if event.pressed:
+			# 1. Check if this touch finger tapped JUMP, DIVE, or DASH directly (works even while another finger holds the analog!)
+			if jump_btn.get_global_rect().grow(10.0).has_point(event.position):
+				player.request_jump()
+				return
+			if dive_btn.get_global_rect().grow(10.0).has_point(event.position):
+				player.request_dive()
+				return
+			if dash_btn.get_global_rect().grow(10.0).has_point(event.position):
+				player.request_dash()
+				return
+
+			# 2. Left half of screen below top HUD bar -> Analog Joystick Finger
+			if event.position.x < half_w and event.position.y > 110.0 and joy_touch_id == -1:
+				joy_touch_id = event.index
+				var base_center: Vector2 = joystick_base.global_position + joystick_base.size * 0.5
+				if event.position.distance_to(base_center) < 155.0:
+					joy_center = base_center
+					var init_delta: Vector2 = event.position - joy_center
+					player.joy_input = (init_delta / 65.0).limit_length(1.0)
+					if is_instance_valid(joystick_knob):
+						joystick_knob.position = Vector2(47.0, 47.0) + player.joy_input * 42.0
+				else:
+					joy_center = event.position
+					player.joy_input = Vector2.ZERO
+			# 3. Right side above action buttons -> Camera Orbit Finger
+			elif event.position.x >= half_w and event.position.y > 90.0 and event.position.y < vp_size.y - 165.0 and cam_touch_id == -1:
+				cam_touch_id = event.index
+		else:
+			if event.index == joy_touch_id:
+				joy_touch_id = -1
+				player.joy_input = Vector2.ZERO
+				if is_instance_valid(joystick_knob):
+					joystick_knob.position = Vector2(47.0, 47.0)
+			elif event.index == cam_touch_id:
+				cam_touch_id = -1
+
 	elif event is InputEventScreenDrag:
 		if event.index == joy_touch_id:
 			var delta_v: Vector2 = event.position - joy_center
-			player.joy_input = (delta_v / 75.0).limit_length(1.0)
+			player.joy_input = (delta_v / 65.0).limit_length(1.0)
 			if is_instance_valid(joystick_knob):
-				joystick_knob.position = Vector2(47.0, 47.0) + player.joy_input * 38.0
-		elif event.position.x >= 520.0 and event.position.y < 420.0:
-			player.camera_yaw_deg = clampf(player.camera_yaw_deg - event.relative.x * 0.22, -110.0, 110.0)
+				joystick_knob.position = Vector2(47.0, 47.0) + player.joy_input * 42.0
+		elif event.index == cam_touch_id:
+			player.camera_yaw_deg = clampf(player.camera_yaw_deg - event.relative.x * 0.24, -120.0, 120.0)
 
 func _process(delta: float) -> void:
 	if not run_active:
@@ -475,6 +625,25 @@ func _process(delta: float) -> void:
 			if r.global_position.distance_to(node.global_position) < 2.2 and absf(r.global_position.y - node.global_position.y) < 1.2:
 				r.velocity.z = 7.2
 				r.velocity.y = 5.2
+
+	for p in pendulums:
+		var piv: Node3D = p["pivot"]
+		var head_mesh: Node3D = p["head"]
+		var spd: float = float(p["speed"])
+		var ph: float = float(p["phase"])
+		piv.rotation.z = sin(elapsed_sec * spd + ph) * deg_to_rad(52.0)
+		if player.global_position.distance_to(head_mesh.global_position) < 1.45:
+			player.velocity.x = signf(sin(elapsed_sec * spd + ph)) * 8.5
+			player.velocity.y = 5.8
+
+	for bp in bounce_pads:
+		if is_instance_valid(bp) and player.global_position.distance_to(bp.global_position) < 1.25:
+			player.velocity.y = player.jump_velocity * 1.38
+			AudioSynth.play_sfx("jump")
+
+	for sp in speed_pads:
+		if is_instance_valid(sp) and player.global_position.distance_to(sp.global_position) < 1.45:
+			player.velocity.z = minf(player.velocity.z, -player.dash_speed * 0.95)
 
 	_update_ai_rivals(delta)
 
