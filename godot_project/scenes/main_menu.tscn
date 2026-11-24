@@ -19,8 +19,11 @@ ambient_light_color = Color(0.75, 0.86, 1.0, 1)
 ambient_light_energy = 1.15
 tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.65
-glow_bloom = 0.15
+glow_intensity = 0.85
+glow_bloom = 0.18
+fog_enabled = true
+fog_light_color = Color(0.45, 0.76, 1.0, 1)
+fog_density = 0.0085
 
 [node name="MainMenu" type="Node3D"]
 script = ExtResource("1_menu")
@@ -37,8 +40,14 @@ shadow_enabled = true
 [node name="FillLight" type="OmniLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 4.2)
 light_color = Color(0.45, 0.82, 1, 1)
-light_energy = 1.2
-omni_range = 14.0
+light_energy = 1.35
+omni_range = 15.0
+
+[node name="RimLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.8, 3.4, -2.5)
+light_color = Color(1, 0.82, 0.35, 1)
+light_energy = 1.65
+omni_range = 12.0
 
 [node name="ShowcaseCamera" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.984808, 0.173648, 0, -0.173648, 0.984808, 0, 2.35, 5.65)
@@ -65,6 +74,7 @@ offset_left = 18.0
 offset_top = 16.0
 offset_right = 330.0
 offset_bottom = 86.0
+mouse_filter = 2
 
 [node name="ProfileLabel" type="Label" parent="UI/Root/TopLeftProfile"]
 layout_mode = 1
@@ -75,6 +85,7 @@ offset_left = 14.0
 offset_top = 6.0
 offset_right = -12.0
 offset_bottom = -6.0
+mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.96, 0.82, 1)
 theme_override_colors/font_outline_color = Color(0.02, 0.05, 0.15, 1)
 theme_override_constants/outline_size = 4
@@ -92,6 +103,7 @@ offset_top = 12.0
 offset_right = 215.0
 offset_bottom = 114.0
 grow_horizontal = 2
+mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="UI/Root/TopCenterLogo"]
 layout_mode = 1
@@ -157,23 +169,23 @@ text = "MODE: CAREER"
 [node name="LeftQuickDock" type="VBoxContainer" parent="UI/Root"]
 layout_mode = 0
 offset_left = 18.0
-offset_top = 135.0
-offset_right = 212.0
-offset_bottom = 445.0
+offset_top = 124.0
+offset_right = 228.0
+offset_bottom = 440.0
 theme_override_constants/separation = 14
 
 [node name="MissionsQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
-custom_minimum_size = Vector2(190, 68)
+custom_minimum_size = Vector2(208, 86)
 layout_mode = 2
 text = "🏆 Missions"
 
 [node name="DailyGiftQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
-custom_minimum_size = Vector2(190, 68)
+custom_minimum_size = Vector2(208, 86)
 layout_mode = 2
 text = "🎁 Daily Gift"
 
 [node name="WorldGraphQuickBtn" type="Button" parent="UI/Root/LeftQuickDock"]
-custom_minimum_size = Vector2(190, 68)
+custom_minimum_size = Vector2(208, 86)
 layout_mode = 2
 text = "⚡ World Graph"
 
@@ -238,17 +250,19 @@ text = "◀"
 [node name="PedestalBadge" type="Panel" parent="UI/Root/HeroPedestalControls"]
 custom_minimum_size = Vector2(390, 68)
 layout_mode = 2
+mouse_filter = 2
 
 [node name="PedestalLabel" type="Label" parent="UI/Root/HeroPedestalControls/PedestalBadge"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.28, 1)
 theme_override_colors/font_outline_color = Color(0.02, 0.04, 0.12, 1)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 16
-text = "♛ MYTHORIA games — By ahmed\nW1 STAGE 1 • Goal <= 59s"
+text = "♛ MYTHORIA games — By ahmed\nW1 STAGE 1 • Goal <= 65s"
 horizontal_alignment = 1
 vertical_alignment = 1
 

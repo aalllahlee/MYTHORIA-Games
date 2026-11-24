@@ -704,3 +704,158 @@ static func style_button(
 	btn.add_theme_color_override("font_outline_color", Color(0.02, 0.04, 0.10, 0.95))
 	btn.add_theme_constant_override("outline_size", 4)
 	btn.add_theme_font_size_override("font_size", font_size)
+
+static func load_asset_texture(res_path: String, fallback_tex: Texture2D = null) -> Texture2D:
+	if ResourceLoader.exists(res_path):
+		var loaded = load(res_path)
+		if loaded is Texture2D:
+			return loaded
+	var img := Image.new()
+	if img.load(res_path) == OK:
+		return ImageTexture.create_from_image(img)
+	return fallback_tex
+
+static func apply_art_card_button(
+	btn: Button,
+	art_tex: Texture2D,
+	title_text: String,
+	border_col: Color,
+	font_size: int = 17,
+	corner_radius: int = 16,
+	scrim_alpha: float = 0.44
+) -> void:
+	btn.clip_contents = true
+	btn.text = ""
+	style_button(btn, Color(0.05, 0.10, 0.24, 0.96), border_col, Color.WHITE, font_size, corner_radius, 3)
+
+	var old_bg: Node = btn.get_node_or_null("CardArtBg")
+	if is_instance_valid(old_bg):
+		old_bg.queue_free()
+	var old_scrim: Node = btn.get_node_or_null("CardScrim")
+	if is_instance_valid(old_scrim):
+		old_scrim.queue_free()
+	var old_lbl: Node = btn.get_node_or_null("CardLabel")
+	if is_instance_valid(old_lbl):
+		old_lbl.queue_free()
+
+	if art_tex != null:
+		var bg := TextureRect.new()
+		bg.name = "CardArtBg"
+		bg.texture = art_tex
+		bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		bg.offset_left = 3.0
+		bg.offset_top = 3.0
+		bg.offset_right = -3.0
+		bg.offset_bottom = -3.0
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(bg)
+
+	var scrim := ColorRect.new()
+	scrim.name = "CardScrim"
+	scrim.color = Color(0.02, 0.05, 0.16, scrim_alpha)
+	scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scrim.offset_left = 3.0
+	scrim.offset_top = 3.0
+	scrim.offset_right = -3.0
+	scrim.offset_bottom = -3.0
+	scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(scrim)
+
+	var lbl := Label.new()
+	lbl.name = "CardLabel"
+	lbl.text = title_text
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lbl.offset_left = 8.0
+	lbl.offset_right = -8.0
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	lbl.add_theme_color_override("font_outline_color", Color(0.02, 0.04, 0.12, 0.98))
+	lbl.add_theme_constant_override("outline_size", 5)
+	btn.add_child(lbl)
+
+static func set_art_card_text(btn: Button, new_text: String) -> void:
+	var lbl: Label = btn.get_node_or_null("CardLabel")
+	if is_instance_valid(lbl):
+		lbl.text = new_text
+	else:
+		btn.text = new_text
+
+static func make_platform_tile_texture(base_col: Color, accent_col: Color) -> ImageTexture:
+	var s: int = 64
+	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
+	var light_c: Color = base_col.lightened(0.22)
+	var mid_c: Color = base_col
+	var dark_c: Color = base_col.darkened(0.28)
+	var gold_c: Color = accent_col.lerp(Color.WHITE, 0.25)
+
+	for y in range(s):
+		for x in range(s):
+			var c: Color = mid_c
+			var gx: int = x % 32
+			var gy: int = y % 32
+			var tile_alt: bool = ((int(x / 32) + int(y / 32)) % 2 == 0)
+			c = light_c if tile_alt else mid_c
+			# Tile bevel & crisp grout border
+			if gx <= 1 or gy <= 1:
+				c = dark_c
+			elif gx == 2 or gy == 2:
+				c = c.lightened(0.18)
+			# Center Mythoria diamond inlay
+			var dx: int = abs(gx - 16)
+			var dy: int = abs(gy - 16)
+			if dx + dy <= 5:
+				c = c.lerp(gold_c, 0.35 if (dx + dy <= 3) else 0.18)
+			img.set_pixel(x, y, c)
+	return ImageTexture.create_from_image(img)
+
+static func make_finish_checker_texture(accent_col: Color) -> ImageTexture:
+	var s: int = 64
+	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
+	var c1 := Color(0.98, 0.99, 1.0)
+	var c2 := accent_col
+	for y in range(s):
+		for x in range(s):
+			var is_even: bool = ((int(x / 16) + int(y / 16)) % 2 == 0)
+			var c: Color = c1 if is_even else c2
+			if x % 16 == 0 or y % 16 == 0:
+				c = c.darkened(0.16)
+			img.set_pixel(x, y, c)
+	return ImageTexture.create_from_image(img)
+
+static func make_textured_platform_mat(col: Color, acc: Color, is_finish: bool = false) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color.WHITE
+	m.albedo_texture = make_finish_checker_texture(acc) if is_finish else make_platform_tile_texture(col, acc)
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3(0.32, 0.32, 0.32)
+	m.roughness = 0.26 if is_finish else 0.34
+	m.metallic = 0.24 if is_finish else 0.10
+	m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	if is_finish:
+		m.emission_enabled = true
+		m.emission = acc
+		m.emission_energy_multiplier = 0.22
+	return m
+
+static func build_blob_shadow() -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.name = "BlobShadow"
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.46
+	cyl.bottom_radius = 0.46
+	cyl.height = 0.02
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.02, 0.05, 0.14, 0.42)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	cyl.material = mat
+	mi.mesh = cyl
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+

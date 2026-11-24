@@ -94,9 +94,138 @@ func goal_time_ms_for_level(level_num: int) -> int:
 	var world_id: int = int((level_num - 1) / 5) + 1
 	var stage_in_world: int = ((level_num - 1) % 5) + 1
 	var segment_count: int = 5 + stage_in_world + int(world_id / 3)
-	var par_sec: float = 24.0 + float(segment_count) * 4.5
-	var raw_sec: float = par_sec if stage_in_world == 5 else par_sec * 1.15
+	var par_sec: float = 28.0 + float(segment_count) * 5.0
+	var raw_sec: float = par_sec if stage_in_world == 5 else par_sec * 1.18
+	if level_num == 1:
+		raw_sec = maxf(raw_sec, 65.0)
 	return int(ceil(raw_sec) * 1000.0)
+
+func get_stage_difficulty_profile(level_num: int) -> Dictionary:
+	var w_id: int = clampi(int((level_num - 1) / 5) + 1, 1, TOTAL_WORLDS)
+	var s_in_w: int = ((level_num - 1) % 5) + 1
+	var diff_norm: float = clampf(float(level_num - 1) / 49.0, 0.0, 1.0)
+
+	if level_num == 1:
+		return {
+			"tier_name": "VERY EASY",
+			"tier_color": Color(0.24, 0.96, 0.54),
+			"new_obstacle": "Speed Boost & Coins",
+			"platform_width": 9.6,
+			"gap_len": 1.25,
+			"obstacle_speed": 0.58,
+			"seg_count": 5,
+			"allow_moving": false,
+			"allow_pendulum": false,
+			"allow_falling": false,
+			"allow_push_block": false,
+			"allow_boulder": false,
+			"allow_bounce": false,
+			"hammer_count_mod": 5
+		}
+	elif level_num == 2:
+		return {
+			"tier_name": "EASY",
+			"tier_color": Color(0.35, 0.92, 0.98),
+			"new_obstacle": "+ Moving Platforms & Bounce",
+			"platform_width": 8.8,
+			"gap_len": 1.6,
+			"obstacle_speed": 0.72,
+			"seg_count": 6,
+			"allow_moving": true,
+			"allow_pendulum": false,
+			"allow_falling": false,
+			"allow_push_block": false,
+			"allow_boulder": false,
+			"allow_bounce": true,
+			"hammer_count_mod": 4
+		}
+	elif level_num == 3:
+		return {
+			"tier_name": "NORMAL",
+			"tier_color": Color(1.0, 0.86, 0.24),
+			"new_obstacle": "+ Swinging Pendulums",
+			"platform_width": 8.2,
+			"gap_len": 1.9,
+			"obstacle_speed": 0.88,
+			"seg_count": 7,
+			"allow_moving": true,
+			"allow_pendulum": true,
+			"allow_falling": false,
+			"allow_push_block": false,
+			"allow_boulder": false,
+			"allow_bounce": true,
+			"hammer_count_mod": 3
+		}
+	elif level_num == 4:
+		return {
+			"tier_name": "CHALLENGING",
+			"tier_color": Color(1.0, 0.56, 0.16),
+			"new_obstacle": "+ Falling Tiles & Push Blocks",
+			"platform_width": 7.6,
+			"gap_len": 2.2,
+			"obstacle_speed": 1.04,
+			"seg_count": 8,
+			"allow_moving": true,
+			"allow_pendulum": true,
+			"allow_falling": true,
+			"allow_push_block": true,
+			"allow_boulder": false,
+			"allow_bounce": true,
+			"hammer_count_mod": 3
+		}
+	elif level_num == 5:
+		return {
+			"tier_name": "HARD",
+			"tier_color": Color(1.0, 0.28, 0.34),
+			"new_obstacle": "+ Rolling Mythoria Boulders!",
+			"platform_width": 7.1,
+			"gap_len": 2.45,
+			"obstacle_speed": 1.16,
+			"seg_count": 9,
+			"allow_moving": true,
+			"allow_pendulum": true,
+			"allow_falling": true,
+			"allow_push_block": true,
+			"allow_boulder": true,
+			"allow_bounce": true,
+			"hammer_count_mod": 2
+		}
+
+	var tier_label: String = "NORMAL"
+	var tier_col: Color = Color(1.0, 0.86, 0.24)
+	if w_id <= 3:
+		tier_label = "CHALLENGING" if s_in_w < 5 else "HARD"
+		tier_col = Color(1.0, 0.56, 0.16) if s_in_w < 5 else Color(1.0, 0.28, 0.34)
+	elif w_id <= 6:
+		tier_label = "HARD" if s_in_w < 5 else "EXPERT"
+		tier_col = Color(1.0, 0.32, 0.32) if s_in_w < 5 else Color(0.92, 0.20, 0.68)
+	else:
+		tier_label = "EXPERT" if s_in_w < 5 else "MYTHIC HARD"
+		tier_col = Color(0.92, 0.20, 0.68) if s_in_w < 5 else Color(1.0, 0.18, 0.22)
+
+	var new_tags := [
+		"Fast Hammers & Boosters",
+		"Moving + Push Gauntlet",
+		"Twin Pendulum Run",
+		"Blinking Tile Sprint",
+		"Full Boulder Temple Trial"
+	]
+	return {
+		"tier_name": tier_label,
+		"tier_color": tier_col,
+		"new_obstacle": new_tags[(s_in_w - 1) % new_tags.size()],
+		"platform_width": clampf(7.6 - diff_norm * 1.9, 5.7, 7.6),
+		"gap_len": clampf(2.1 + diff_norm * 1.35, 2.1, 3.45),
+		"obstacle_speed": clampf(1.05 + diff_norm * 0.85, 1.05, 1.90),
+		"seg_count": 6 + s_in_w + int(w_id / 3),
+		"allow_moving": true,
+		"allow_pendulum": true,
+		"allow_falling": s_in_w >= 2 or w_id >= 3,
+		"allow_push_block": s_in_w >= 2 or w_id >= 2,
+		"allow_boulder": s_in_w >= 4 or w_id >= 4,
+		"allow_bounce": true,
+		"hammer_count_mod": 2 if w_id >= 4 else 3
+	}
 
 func init_progression_graph() -> void:
 	for i in range(1, 51):
