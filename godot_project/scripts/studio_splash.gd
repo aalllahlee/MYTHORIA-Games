@@ -73,7 +73,7 @@ func _process(delta: float) -> void:
 	var pct: int = clampi(int((elapsed / 7.3) * 100.0), 0, 100)
 	var max_fill_w: float = loading_frame.size.x - 12.0
 	loading_fill.size.x = maxf(18.0, max_fill_w * (float(pct) / 100.0))
-	loading_label.text = "Loading... %d%%" % pct
+	loading_label.text = GameState.tr_text("Loading Mythoria... %d%%" % pct, "جاري تحميل عالم ميثوريا... %d%%" % pct)
 
 	if elapsed >= TOTAL_DURATION:
 		_transition_to_main_menu()

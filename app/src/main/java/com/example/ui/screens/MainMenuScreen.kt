@@ -5,6 +5,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +38,9 @@ import com.example.game.model.GameCatalog
 import com.example.game.model.GameMode
 import com.example.game.model.LocalizedStrings
 import com.example.game.model.XpProgression
+import com.example.ui.components.ArcadeButtonArtwork
+import com.example.ui.components.GameModeArtworkBadge
+import com.example.ui.components.MenuButtonArtType
 import com.example.ui.theme.*
 import com.example.viewmodel.GameScreen
 
@@ -155,7 +160,7 @@ fun MainMenuScreen(
                             .border(1.5.dp, SapphireGlow, CircleShape)
                             .testTag("missions_button")
                     ) {
-                        Icon(Icons.Filled.Assignment, contentDescription = strings.missions, tint = SapphireGlow)
+                        ArcadeButtonArtwork(type = MenuButtonArtType.MISSIONS, modifier = Modifier.size(34.dp))
                     }
                     if (hasClaimableMission) {
                         Box(
@@ -182,7 +187,7 @@ fun MainMenuScreen(
             }
         }
 
-        // Left Column: Mythological Navigation Buttons (WORLDS, CHARACTERS, MISSIONS, SHOP, DAILY CHALLENGE)
+        // Left Column: Rich Illustrated Mythological Navigation Buttons (WORLDS, CHARACTERS, MISSIONS, SHOP, DAILY CHALLENGE)
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -191,40 +196,46 @@ fun MainMenuScreen(
         ) {
             ArcadeMenuButton(
                 label = strings.levels,
-                icon = Icons.Filled.Map,
-                gradient = listOf(SapphireElectric, SapphireDeep),
+                subtitle = "10 Worlds • 50 Stages",
+                artType = MenuButtonArtType.WORLDS,
+                gradient = listOf(Color(0xFF0369A1), Color(0xFF0C4A6E), Color(0xFF082F49)),
                 borderColor = SapphireGlow,
                 modifier = Modifier.testTag("levels_button"),
                 onClick = { onNavigate(GameScreen.LevelSelect) }
             )
             ArcadeMenuButton(
                 label = strings.characters,
-                icon = Icons.Filled.Shield,
-                gradient = listOf(Color(0xFF4338CA), Color(0xFF1E1B4B)),
+                subtitle = "Ahmed • Salma • Ahmed",
+                artType = MenuButtonArtType.CHARACTERS,
+                gradient = listOf(Color(0xFF4338CA), Color(0xFF312E81), Color(0xFF1E1B4B)),
                 borderColor = ChampionGold,
                 modifier = Modifier.testTag("characters_button"),
                 onClick = { onNavigate(GameScreen.Characters) }
             )
             ArcadeMenuButton(
                 label = strings.missions,
-                icon = Icons.Filled.AssignmentTurnedIn,
-                gradient = listOf(Color(0xFF0284C7), Color(0xFF0C4A6E)),
-                borderColor = SapphireGlow,
+                subtitle = "Royal Quests & Crown",
+                artType = MenuButtonArtType.MISSIONS,
+                gradient = listOf(Color(0xFF0284C7), Color(0xFF075985), Color(0xFF0C4A6E)),
+                borderColor = if (hasClaimableMission) IslandMint else SapphireGlow,
+                hasBadge = hasClaimableMission,
                 modifier = Modifier.testTag("menu_missions_button"),
                 onClick = { onNavigate(GameScreen.Missions) }
             )
             ArcadeMenuButton(
                 label = strings.shop,
-                icon = Icons.Filled.ShoppingBag,
-                gradient = listOf(Color(0xFF9333EA), Color(0xFF4C1D95)),
+                subtitle = "Crowns, Boots & Trails",
+                artType = MenuButtonArtType.SHOP,
+                gradient = listOf(Color(0xFF7E22CE), Color(0xFF581C87), Color(0xFF3B0764)),
                 borderColor = ChampionGold,
                 modifier = Modifier.testTag("shop_button"),
                 onClick = { onNavigate(GameScreen.Shop) }
             )
             ArcadeMenuButton(
                 label = strings.dailyChallenge,
-                icon = Icons.Filled.Bolt,
-                gradient = listOf(Color(0xFFD97706), Color(0xFF78350F)),
+                subtitle = "2x Gold & XP Bonus",
+                artType = MenuButtonArtType.DAILY_CHALLENGE,
+                gradient = listOf(Color(0xFFD97706), Color(0xFFB45309), Color(0xFF78350F)),
                 borderColor = MythicGoldLight,
                 modifier = Modifier.testTag("daily_button"),
                 onClick = { onPlayMode(GameMode.DAILY_CHALLENGE, 100) }
@@ -332,12 +343,12 @@ fun MainMenuScreen(
                 )
             }
 
-            // Giant Royal Gold & Sapphire PLAY Button
+            // Giant Royal Gold & Sapphire PLAY Button with Embedded Illustrated Crown Medallion
             Box(
                 modifier = Modifier
                     .scale(playScale)
-                    .width(214.dp)
-                    .height(62.dp)
+                    .width(226.dp)
+                    .height(64.dp)
                     .shadow(16.dp, RoundedCornerShape(32.dp))
                     .clip(RoundedCornerShape(32.dp))
                     .background(
@@ -347,31 +358,47 @@ fun MainMenuScreen(
                     )
                     .border(2.5.dp, SapphireGlow, RoundedCornerShape(32.dp))
                     .clickable { onShowModeDialog(true) }
+                    .padding(horizontal = 12.dp)
                     .testTag("play_button"),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.CenterStart
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = RoyalNavyDeep, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    ArcadeButtonArtwork(
+                        type = MenuButtonArtType.PLAY_CROWN,
+                        modifier = Modifier.size(44.dp)
+                    )
                     Text(
                         text = strings.play,
                         fontFamily = FredokaFontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp,
+                        fontSize = 23.sp,
                         color = RoyalNavyDeep
                     )
+                    Surface(
+                        shape = CircleShape,
+                        color = RoyalNavyDeep,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = ChampionGold, modifier = Modifier.size(24.dp))
+                        }
+                    }
                 }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SmallMenuButton(
-                    icon = Icons.Filled.Settings,
+                    artType = MenuButtonArtType.SETTINGS,
                     label = strings.settings,
                     tag = "settings_button",
                     onClick = { onNavigate(GameScreen.Settings) }
                 )
                 SmallMenuButton(
-                    icon = Icons.Filled.Info,
+                    artType = MenuButtonArtType.ABOUT,
                     label = strings.about,
                     tag = "about_button",
                     onClick = { onNavigate(GameScreen.About) }
@@ -431,7 +458,7 @@ private fun GameModeDialog(
                     ModeCard(
                         title = strings.careerMode,
                         subtitle = "Stage $highestUnlocked / 50",
-                        icon = Icons.Filled.Flag,
+                        mode = GameMode.CAREER,
                         color = SapphireGlow,
                         modifier = Modifier.weight(1f).testTag("mode_career"),
                         onClick = { onSelectMode(GameMode.CAREER) }
@@ -439,7 +466,7 @@ private fun GameModeDialog(
                     ModeCard(
                         title = strings.rivalRaceMode,
                         subtitle = strings.reachFinishFirst,
-                        icon = Icons.Filled.Groups,
+                        mode = GameMode.RIVAL_RACE,
                         color = ChampionGold,
                         modifier = Modifier.weight(1f).testTag("mode_rival_race"),
                         onClick = { onSelectMode(GameMode.RIVAL_RACE) }
@@ -449,7 +476,7 @@ private fun GameModeDialog(
                     ModeCard(
                         title = strings.endlessMode,
                         subtitle = "Infinite Sky Temple Survival",
-                        icon = Icons.Filled.AllInclusive,
+                        mode = GameMode.ENDLESS,
                         color = SkyCyanDark,
                         modifier = Modifier.weight(1f).testTag("mode_endless"),
                         onClick = { onSelectMode(GameMode.ENDLESS) }
@@ -457,7 +484,7 @@ private fun GameModeDialog(
                     ModeCard(
                         title = strings.timeAttackMode,
                         subtitle = "Beat Temple Par Medals",
-                        icon = Icons.Filled.Timer,
+                        mode = GameMode.TIME_ATTACK,
                         color = HeroCrimson,
                         modifier = Modifier.weight(1f).testTag("mode_time_attack"),
                         onClick = { onSelectMode(GameMode.TIME_ATTACK) }
@@ -466,7 +493,7 @@ private fun GameModeDialog(
                 ModeCard(
                     title = strings.practiceMode,
                     subtitle = "Master Jump, Dive & Thunder Dash",
-                    icon = Icons.Filled.School,
+                    mode = GameMode.PRACTICE,
                     color = CandyMagenta,
                     modifier = Modifier.fillMaxWidth().testTag("mode_practice"),
                     onClick = { onSelectMode(GameMode.PRACTICE) }
@@ -480,24 +507,24 @@ private fun GameModeDialog(
 private fun ModeCard(
     title: String,
     subtitle: String,
-    icon: ImageVector,
+    mode: GameMode,
     color: Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = color.copy(alpha = 0.22f),
+        color = color.copy(alpha = 0.20f),
         modifier = modifier
-            .height(74.dp)
-            .border(1.5.dp, color, RoundedCornerShape(18.dp))
+            .height(76.dp)
+            .border(1.8.dp, color, RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+            GameModeArtworkBadge(mode = mode, accent = color, modifier = Modifier.size(50.dp))
             Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(title, fontFamily = FredokaFontFamily, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -530,51 +557,126 @@ private fun MenuBadge(icon: ImageVector, iconTint: Color, text: String, tag: Str
 @Composable
 private fun ArcadeMenuButton(
     label: String,
-    icon: ImageVector,
+    subtitle: String,
+    artType: MenuButtonArtType,
     gradient: List<Color>,
     borderColor: Color,
+    hasBadge: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "arcade_btn_scale"
+    )
+
     Box(
         modifier = modifier
-            .width(198.dp)
-            .height(48.dp)
-            .shadow(8.dp, RoundedCornerShape(16.dp))
+            .scale(pressScale)
+            .width(214.dp)
+            .height(50.dp)
+            .shadow(10.dp, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .background(Brush.horizontalGradient(gradient))
-            .border(1.5.dp, borderColor, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .border(
+                width = 1.8.dp,
+                brush = Brush.horizontalGradient(listOf(ChampionGold, borderColor, ChampionGold)),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.material3.ripple(),
+                onClick = onClick
+            )
+            .padding(horizontal = 8.dp, vertical = 5.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = ChampionGold, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(label, fontFamily = FredokaFontFamily, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                ArcadeButtonArtwork(type = artType, modifier = Modifier.size(38.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = label,
+                        fontFamily = FredokaFontFamily,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = subtitle,
+                        fontSize = 9.sp,
+                        color = MythicGoldLight.copy(alpha = 0.9f),
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+            if (hasBadge) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(IslandMint)
+                        .border(1.dp, Color.White, CircleShape)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.ChevronRight,
+                    contentDescription = null,
+                    tint = ChampionGold.copy(alpha = 0.85f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun SmallMenuButton(icon: ImageVector, label: String, tag: String, onClick: () -> Unit) {
+private fun SmallMenuButton(
+    artType: MenuButtonArtType,
+    label: String,
+    tag: String,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "small_btn_scale"
+    )
+
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = SurfaceCardDark,
         modifier = Modifier
+            .scale(pressScale)
             .height(48.dp)
-            .border(1.5.dp, ChampionGold.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+            .border(1.5.dp, ChampionGold.copy(alpha = 0.75f), RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.material3.ripple(),
+                onClick = onClick
+            )
             .testTag(tag)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = label, tint = SapphireGlow, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(label, fontFamily = FredokaFontFamily, fontSize = 13.sp, color = Color.White)
+            ArcadeButtonArtwork(type = artType, modifier = Modifier.size(32.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(label, fontFamily = FredokaFontFamily, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 }

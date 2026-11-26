@@ -17,13 +17,12 @@ sky = SubResource("Sky_menu")
 ambient_light_source = 3
 ambient_light_color = Color(0.75, 0.86, 1.0, 1)
 ambient_light_energy = 1.15
-tonemap_mode = 2
-glow_enabled = true
-glow_intensity = 0.85
-glow_bloom = 0.18
+tonemap_mode = 0
+tonemap_exposure = 1.0
+glow_enabled = false
 fog_enabled = true
 fog_light_color = Color(0.45, 0.76, 1.0, 1)
-fog_density = 0.0085
+fog_density = 0.0065
 
 [node name="MainMenu" type="Node3D"]
 script = ExtResource("1_menu")
@@ -143,28 +142,33 @@ layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -450.0
+offset_left = -560.0
 offset_top = 16.0
 offset_right = -18.0
 offset_bottom = 72.0
 grow_horizontal = 0
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 alignment = 2
 
 [node name="CoinsBadge" type="Button" parent="UI/Root/TopRightBar"]
-custom_minimum_size = Vector2(145, 50)
+custom_minimum_size = Vector2(130, 50)
 layout_mode = 2
 text = "🪙 120 +"
 
 [node name="StarsBadge" type="Button" parent="UI/Root/TopRightBar"]
-custom_minimum_size = Vector2(130, 50)
+custom_minimum_size = Vector2(120, 50)
 layout_mode = 2
 text = "★ 0 / 150"
 
 [node name="ModeButton" type="Button" parent="UI/Root/TopRightBar"]
-custom_minimum_size = Vector2(145, 50)
+custom_minimum_size = Vector2(140, 50)
 layout_mode = 2
 text = "MODE: CAREER"
+
+[node name="LangButton" type="Button" parent="UI/Root/TopRightBar"]
+custom_minimum_size = Vector2(105, 50)
+layout_mode = 2
+text = "🌐 عربي"
 
 [node name="LeftQuickDock" type="VBoxContainer" parent="UI/Root"]
 layout_mode = 0
@@ -364,6 +368,7 @@ alignment = 1
 [connection signal="pressed" from="UI/Root/TopRightBar/CoinsBadge" to="." method="_on_shop_tab_pressed"]
 [connection signal="pressed" from="UI/Root/TopRightBar/StarsBadge" to="." method="_on_worlds_tab_pressed"]
 [connection signal="pressed" from="UI/Root/TopRightBar/ModeButton" to="." method="_on_mode_button_pressed"]
+[connection signal="pressed" from="UI/Root/TopRightBar/LangButton" to="." method="_on_lang_button_pressed"]
 [connection signal="pressed" from="UI/Root/LeftQuickDock/MissionsQuickBtn" to="." method="_on_missions_tab_pressed"]
 [connection signal="pressed" from="UI/Root/LeftQuickDock/DailyGiftQuickBtn" to="." method="_on_daily_gift_pressed"]
 [connection signal="pressed" from="UI/Root/LeftQuickDock/WorldGraphQuickBtn" to="." method="_on_worlds_tab_pressed"]

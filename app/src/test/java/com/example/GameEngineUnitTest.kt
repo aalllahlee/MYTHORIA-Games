@@ -13,7 +13,7 @@ class GameEngineUnitTest {
     @Test
     fun all50LevelsAnd10WorldsAreValidAndCompletable() {
         assertEquals(10, GameCatalog.worlds.size)
-        assertEquals(15, GameCatalog.skins.size)
+        assertEquals(3, GameCatalog.skins.size)
         val levels = LevelCatalog.allLevels
         assertEquals(50, levels.size)
 
@@ -384,5 +384,166 @@ class GameEngineUnitTest {
         assertTrue("Moving platform must continue moving without reset", movingPlat.curX != platXBefore)
         assertEquals("Rival on moving platform must NOT respawn", 0, rivalOnPlat.checkpointState.respawnCount)
         assertTrue("Rival on moving platform must remain above platform height", rivalOnPlat.y >= movingPlat.curY)
+    }
+
+    @Test
+    fun test8_solidObstaclesPowerUpsBossChestsAndNameOnlyCharacters() {
+        // 1) Characters must have ONLY their names (Ahmed, Salma, Ahmed) and empty description
+        assertEquals(3, GameCatalog.skins.size)
+        assertEquals(listOf("Ahmed", "Salma", "Ahmed"), GameCatalog.skins.map { it.name })
+        assertTrue("Character descriptions must be empty", GameCatalog.skins.all { it.description.isEmpty() })
+
+        // 2) Longer tracks, power-ups, secret chests, and Stage-5 Boss Sentinel chests
+        val lvl1 = LevelCatalog.getLevel(1)
+        val lvl5 = LevelCatalog.getLevel(5)
+        assertTrue("Level 1 track should be long (> 110m)", kotlin.math.abs(lvl1.finishZ - lvl1.startZ) > 110f)
+        assertTrue("Every level should spawn 3D power-ups", lvl1.powerUps.isNotEmpty())
+        assertTrue("Every level should spawn hidden royal treasure chests", lvl1.treasureChests.isNotEmpty())
+        assertTrue("Stage 5 Gateway level must include a Boss Guardian Treasure Chest", lvl5.treasureChests.any { it.isBossChest })
+
+        // 3) Both positive AND negative arms of ROTATING_BEAM and perpendicular blades of SPINNING_BLADE must be 100% solid
+        val world = GamePhysicsWorld()
+        world.loadLevel(lvl1, GameMode.CAREER)
+        world.step(0.016f)
+
+        val beamObs = com.example.game.model.ObstacleDef(
+            type = com.example.game.model.ObstacleType.ROTATING_BEAM,
+            x = 0f, y = 0.5f, z = -20f,
+            speed = 0f, phase = 0f, range = 2.4f, scale = 1.0f
+        )
+        world.activeObstacles.clear()
+        world.activeObstacles.add(beamObs)
+
+        // Place player on the NEGATIVE arm (-1.6m along X when angle = 0)
+        world.px = -1.6f
+        world.py = 0.5f
+        world.pz = -20f
+        world.hitStunTimer = 0f
+        world.step(0.016f)
+        assertTrue("Negative half-arm of ROTATING_BEAM must be solid and trigger hit stun", world.hitStunTimer > 0f)
+
+        // Test Golden Aegis Shield absorbs hit without knockback velocity
+        world.hitStunTimer = 0f
+        world.shieldTimer = 8.0f
+        world.vx = 0f
+        world.vz = 0f
+        world.px = 1.6f
+        world.py = 0.5f
+        world.pz = -20f
+        world.step(0.016f)
+        assertEquals("Aegis Shield should be consumed on hit", 0f, world.shieldTimer, 0.001f)
+    }
+
+    @Test
+    fun test9_difficultyTiersChestTiersSeasonalEventsAndNoDuplicateChestRewards() {
+        // 1) Verify 5 difficulty tiers across levels 1..50
+        assertEquals(com.example.game.model.DifficultyTier.TUTORIAL, LevelCatalog.getLevel(1).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.TUTORIAL, LevelCatalog.getLevel(5).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.EASY, LevelCatalog.getLevel(6).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.EASY, LevelCatalog.getLevel(15).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.MEDIUM, LevelCatalog.getLevel(16).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.MEDIUM, LevelCatalog.getLevel(30).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.HARD, LevelCatalog.getLevel(31).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.HARD, LevelCatalog.getLevel(40).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.EXPERT, LevelCatalog.getLevel(41).difficultyTier)
+        assertEquals(com.example.game.model.DifficultyTier.EXPERT, LevelCatalog.getLevel(50).difficultyTier)
+
+        // 2) Verify all 4 chest tiers exist across the 50 levels (WOODEN, METALLIC, MAGIC_RARE, EVENT_BOSS)
+        val allChestTiers = LevelCatalog.allLevels.flatMap { it.treasureChests }.map { it.tier }.toSet()
+        assertTrue(allChestTiers.contains(com.example.game.model.ChestTier.WOODEN))
+        assertTrue(allChestTiers.contains(com.example.game.model.ChestTier.METALLIC))
+        assertTrue(allChestTiers.contains(com.example.game.model.ChestTier.MAGIC_RARE))
+        assertTrue(allChestTiers.contains(com.example.game.model.ChestTier.EVENT_BOSS))
+
+        // 3) Verify opening a chest awards its bonus coins once and cannot be opened again in the same run
+        val world = GamePhysicsWorld()
+        world.loadLevel(LevelCatalog.getLevel(5), GameMode.CAREER)
+        world.step(0.016f)
+        val bossChest = world.treasureChests.first { it.def.tier == com.example.game.model.ChestTier.EVENT_BOSS }
+        val coinsBefore = world.coinsCollected
+
+        world.px = bossChest.def.x
+        world.py = bossChest.def.y
+        world.pz = bossChest.def.z
+        world.step(0.016f)
+
+        assertTrue("Chest should be marked opened", bossChest.opened)
+        assertEquals(1, world.chestsOpenedInRun)
+        assertEquals(coinsBefore + bossChest.def.bonusCoins, world.coinsCollected)
+
+        // Step multiple frames standing on the same chest -> must not award coins again
+        repeat(10) {
+            world.px = bossChest.def.x
+            world.py = bossChest.def.y
+            world.pz = bossChest.def.z
+            world.step(0.016f)
+        }
+        assertEquals("Chest must not award duplicate coins", 1, world.chestsOpenedInRun)
+        assertEquals(coinsBefore + bossChest.def.bonusCoins, world.coinsCollected)
+
+        // 4) Verify Daily, Weekly, and Seasonal Event missions + 7-Day Login Streak + Seasonal Event schedule
+        assertTrue(GameCatalog.missions.any { it.cadence == com.example.game.model.MissionCadence.DAILY })
+        assertTrue(GameCatalog.missions.any { it.cadence == com.example.game.model.MissionCadence.WEEKLY })
+        assertTrue(GameCatalog.missions.any { it.cadence == com.example.game.model.MissionCadence.EVENT })
+        assertEquals(7, GameCatalog.loginStreakRewards.size)
+        val event = GameCatalog.getActiveSeasonalEvent(20500L)
+        assertTrue(event.titleEn.isNotEmpty())
+        assertTrue(GameCatalog.getSeasonalEventDaysRemaining(20500L) in 1..7)
+    }
+
+    @Test
+    fun test10_airborneShadowProjectionAudioSyncAndCameraArchwayAvoidance() {
+        val playedSfx = mutableListOf<String>()
+        val world = GamePhysicsWorld(object : com.example.game.engine3d.GameWorldListener {
+            override fun onSfx(name: String) {
+                playedSfx += name
+            }
+            override fun onHaptic(strong: Boolean) {}
+            override fun onLevelWon(
+                levelNumber: Int, timeMs: Long, coinsCollected: Int, distanceM: Float,
+                obstaclesPassed: Int, raceRank: Int, totalRacers: Int, jumpsInRun: Int,
+                perfectLandings: Int, secretPathFound: Boolean, narrowBridgesCrossed: Int,
+                dashUsed: Boolean, respawnCount: Int, chestsOpened: Int
+            ) {}
+            override fun onPlayerFell() {}
+        })
+
+        val level = LevelCatalog.getLevel(1)
+        world.loadLevel(level, GameMode.CAREER)
+        repeat(25) { world.step(0.02f) }
+        assertTrue("Player should be grounded on start platform", world.grounded)
+        assertTrue("Landing SFX should have played upon touching start platform", playedSfx.any { it.startsWith("land") })
+
+        // 1) When jumping above a platform, shadowFloorY remains valid and shadowHeightGap reflects height above platform
+        playedSfx.clear()
+        world.triggerJump()
+        world.step(0.016f)
+        world.step(0.04f)
+        assertFalse("Shadow floor Y should be tracked while airborne above a platform", world.shadowFloorY.isNaN())
+        assertTrue("Shadow height gap should be positive while airborne", world.shadowHeightGap > 0.1f)
+        assertTrue("Jump SFX should have been triggered", playedSfx.contains("jump"))
+
+        // 2) Opening a Wooden Chest triggers "chest_wooden" SFX and activates waist pickupAuraTimer
+        val woodenChest = world.treasureChests.first { it.def.tier == com.example.game.model.ChestTier.WOODEN }
+        playedSfx.clear()
+        world.px = woodenChest.def.x
+        world.py = woodenChest.def.y
+        world.pz = woodenChest.def.z
+        world.step(0.016f)
+        assertTrue("Opening wooden chest should trigger chest_wooden SFX", playedSfx.contains("chest_wooden"))
+        assertTrue("Opening chest should activate short waist pickup aura", world.pickupAuraTimer > 0f)
+
+        // 3) Reduced Motion / Camera Shake toggle: when cameraShakeEnabled = false, hits do not shake camera
+        world.loadLevel(LevelCatalog.getLevel(3), GameMode.CAREER)
+        world.step(0.016f)
+        world.cameraShakeEnabled = false
+        world.cameraShakeTimer = 0f
+        world.shieldTimer = 0f
+        val obs = world.activeObstacles.first()
+        world.px = obs.x
+        world.py = obs.y + 0.8f
+        world.pz = obs.z
+        world.step(0.016f)
+        assertEquals("Camera shake timer must remain 0 when cameraShakeEnabled is false", 0f, world.cameraShakeTimer, 0.001f)
     }
 }

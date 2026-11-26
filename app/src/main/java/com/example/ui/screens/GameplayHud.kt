@@ -273,6 +273,112 @@ fun GameplayHud(
             }
         }
 
+        // Active 3D Power-Up Status Pills (Aegis Shield, Coin Magnet, Hermes Glide Wings)
+        if ((hud.shieldRemainingSec > 0f || hud.magnetRemainingSec > 0f || hud.wingsRemainingSec > 0f) &&
+            !hud.isVictory && !hud.isFailed
+        ) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .safeDrawingPadding()
+                    .padding(start = 16.dp, top = 96.dp)
+                    .testTag("hud_powerups_row"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (hud.shieldRemainingSec > 0f) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xD90A183D),
+                        modifier = Modifier.border(1.2.dp, SkyCyan, RoundedCornerShape(10.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.Shield, contentDescription = "Shield", tint = SkyCyan, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "SHIELD ${String.format("%.1fs", hud.shieldRemainingSec)}",
+                                fontFamily = FredokaFontFamily,
+                                fontSize = 10.sp,
+                                color = SkyCyan
+                            )
+                        }
+                    }
+                }
+                if (hud.magnetRemainingSec > 0f) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xD92B1204),
+                        modifier = Modifier.border(1.2.dp, ChampionGold, RoundedCornerShape(10.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.AutoAwesome, contentDescription = "Magnet", tint = ChampionGold, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "MAGNET ${String.format("%.1fs", hud.magnetRemainingSec)}",
+                                fontFamily = FredokaFontFamily,
+                                fontSize = 10.sp,
+                                color = ChampionGold
+                            )
+                        }
+                    }
+                }
+                if (hud.wingsRemainingSec > 0f) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xD9062E22),
+                        modifier = Modifier.border(1.2.dp, IslandMint, RoundedCornerShape(10.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.FlightTakeoff, contentDescription = "Wings", tint = IslandMint, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "WINGS ${String.format("%.1fs", hud.wingsRemainingSec)}",
+                                fontFamily = FredokaFontFamily,
+                                fontSize = 10.sp,
+                                color = IslandMint
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Accessible Visual Hazard Warning Indicator (so players never rely on audio alone)
+        if (hud.hazardWarningActive && !hud.isVictory && !hud.isFailed) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xCC5A0B24),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .safeDrawingPadding()
+                    .padding(end = 16.dp, top = 66.dp)
+                    .border(1.5.dp, HeroCrimson, RoundedCornerShape(12.dp))
+                    .testTag("hud_hazard_warning_badge")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Warning, contentDescription = "Hazard Ahead", tint = ChampionGold, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = if (language == AppLanguage.AR) "تنبيه: خطر أمامك!" else "HAZARD AHEAD!",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
         // MYTHORIA Checkpoint Activated / Portal Respawn Banner OR Survival Tier-Up Banner OR Level Start Banner
         if (hud.checkpointBannerText.isNotEmpty() && !hud.isVictory && !hud.isFailed) {
             Surface(

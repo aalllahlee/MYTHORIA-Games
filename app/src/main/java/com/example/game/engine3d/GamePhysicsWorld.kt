@@ -32,7 +32,11 @@ data class HudSnapshot(
     val raceRank: Int = 1,
     val totalRacers: Int = 1,
     val jumpsInRun: Int = 0,
-    val goalTimeMs: Long = 0L
+    val goalTimeMs: Long = 0L,
+    val hazardWarningActive: Boolean = false,
+    val shieldRemainingSec: Float = 0f,
+    val magnetRemainingSec: Float = 0f,
+    val wingsRemainingSec: Float = 0f
 )
 
 data class RuntimeRival(
@@ -82,7 +86,21 @@ data class RuntimePlatform(
 
 data class RuntimeCoin(
     val def: CoinDef,
+    var curX: Float = def.x,
+    var curY: Float = def.y,
+    var curZ: Float = def.z,
     var collected: Boolean = false
+)
+
+data class RuntimePowerUp(
+    val def: PowerUpDef,
+    var collected: Boolean = false
+)
+
+data class RuntimeTreasureChest(
+    val def: TreasureChestDef,
+    var opened: Boolean = false,
+    var openAnim: Float = 0f
 )
 
 data class Particle(
@@ -104,7 +122,13 @@ interface GameWorldListener {
         obstaclesPassed: Int,
         raceRank: Int,
         totalRacers: Int,
-        jumpsInRun: Int
+        jumpsInRun: Int,
+        perfectLandings: Int = 0,
+        secretPathFound: Boolean = false,
+        narrowBridgesCrossed: Int = 0,
+        dashUsed: Boolean = false,
+        respawnCount: Int = 0,
+        chestsOpened: Int = 0
     )
     fun onPlayerFell()
 }
@@ -120,10 +144,31 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
 
     val platforms = ArrayList<RuntimePlatform>()
     val coins = ArrayList<RuntimeCoin>()
+    val powerUps = ArrayList<RuntimePowerUp>()
+    val treasureChests = ArrayList<RuntimeTreasureChest>()
     val activeObstacles = ArrayList<ObstacleDef>()
     val activeCheckpoints = ArrayList<CheckpointDef>()
     val rivals = ArrayList<RuntimeRival>()
     val particles = ArrayList<Particle>(160)
+
+    // Active 3D Power-Up Timers
+    var shieldTimer = 0f
+    var magnetTimer = 0f
+    var wingsTimer = 0f
+
+    // Personal Best Ghost Racer Recording & Playback
+    private val currentRunGhostFrames = ArrayList<GhostFrame>(512)
+    private var activeGhostFrames: List<GhostFrame> = emptyList()
+    private var ghostRecordTimer = 0f
+    var ghostActive = false
+    var ghostX = 0f
+    var ghostY = 1.6f
+    var ghostZ = 1.5f
+    var ghostYaw = 180f
+
+    companion object {
+        val bestGhostByLevel = HashMap<Int, List<GhostFrame>>()
+    }
 
     // Per-checkpoint activation animation pulse timers (checkpointIndex -> remainingSec)
     val checkpointPulseTimers = HashMap<Int, Float>()
@@ -139,6 +184,12 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
     var vy = 0f
     var vz = 0f
     var playerYaw = 180f // Facing -Z (into course)
+    var playerTurnLeanDeg = 0f // Subtle lateral body banking on turns
+    var playerAccelPitchDeg = 0f // Subtle forward/backward pitch on acceleration/braking
+    var pickupAuraTimer = 0f // Short non-obstructive waist aura on ability/reward pickup
+    var pickupAuraColor: Rgba = Rgba.fromHex(0xFFD22B)
+    var shadowFloorY = Float.NaN // Underlying platform surface Y for ground & airborne shadow
+    var shadowHeightGap = 0f
     var grounded = false
     var coyoteTimer = 0f
     var jumpBufferTimer = 0f
@@ -153,6 +204,12 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
     var worldTime = 0f
     var obstacleTime = 0f
     var platformTime = 0f
+    var cameraShakeTimer = 0f
+    var cameraShakeIntensity = 0f
+    var hazardWarningActive = false
+    private var footstepTimer = 0f
+    private var slideSfxTimer = 0f
+    private var warnSfxCooldown = 0f
 
     // Survival Progression & Run Stats
     var spawnX = 0f
@@ -168,6 +225,15 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
     var maxDistanceM = 0f
     var obstaclesPassed = 0
     var jumpsInRun = 0
+    var perfectLandingsInRun = 0
+    var secretPathFoundInRun = false
+    var chestsOpenedInRun = 0
+    var narrowBridgesCrossedWithoutFall = 0
+    var dashesUsedInRun = 0
+    private var wasOnNarrowBridge = false
+    private var lastNarrowBridgeZ = Float.NaN
+    private var airbornePeakY = 0f
+    private var ambientParticleTimer = 0f
     var survivalTier = 1
     var speedMultiplier = 1.0f
     var tierBannerTimer = 0f
@@ -189,6 +255,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
     @Volatile var cameraPitchDeg = 22f
     @Volatile var cameraSensitivity = 1.0f
     @Volatile var joystickSensitivity = 1.0f
+    @Volatile var cameraShakeEnabled = true
     @Volatile var dashUnlocked = false
     @Volatile var selectedSkin: SkinDef = GameCatalog.skins[0]
     @Volatile var selectedHatId: String = "hat_none"
@@ -231,11 +298,17 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         currentWorld = GameCatalog.worlds[1]
         platforms.clear()
         coins.clear()
+        powerUps.clear()
+        treasureChests.clear()
         activeObstacles.clear()
         activeCheckpoints.clear()
         checkpointPulseTimers.clear()
         rivals.clear()
         particles.clear()
+        shieldTimer = 0f
+        magnetTimer = 0f
+        wingsTimer = 0f
+        ghostActive = false
         speedMultiplier = 1.0f
         survivalTier = 1
         obstacleTime = 0f
@@ -270,6 +343,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         level.platforms.forEach { platforms += RuntimePlatform(it) }
         coins.clear()
         level.coins.forEach { coins += RuntimeCoin(it) }
+        powerUps.clear()
+        level.powerUps.forEach { powerUps += RuntimePowerUp(it) }
+        treasureChests.clear()
+        level.treasureChests.forEach { treasureChests += RuntimeTreasureChest(it) }
         activeObstacles.clear()
         activeObstacles.addAll(level.obstacles)
         activeCheckpoints.clear()
@@ -277,6 +354,15 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         checkpointPulseTimers.clear()
         rivals.clear()
         particles.clear()
+        shieldTimer = 0f
+        magnetTimer = 0f
+        wingsTimer = 0f
+        currentRunGhostFrames.clear()
+        ghostRecordTimer = 0f
+        activeGhostFrames = synchronized(bestGhostByLevel) {
+            bestGhostByLevel[level.number] ?: emptyList()
+        }
+        ghostActive = false
 
         spawnX = level.startX
         spawnY = level.startY
@@ -290,6 +376,14 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         maxDistanceM = 0f
         obstaclesPassed = 0
         jumpsInRun = 0
+        perfectLandingsInRun = 0
+        secretPathFoundInRun = false
+        chestsOpenedInRun = 0
+        narrowBridgesCrossedWithoutFall = 0
+        dashesUsedInRun = 0
+        wasOnNarrowBridge = false
+        lastNarrowBridgeZ = Float.NaN
+        airbornePeakY = level.startY
         survivalTier = 1
         speedMultiplier = 1.0f
         obstacleTime = 0f
@@ -550,6 +644,8 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         playerCheckpointState.arrivalAnimTimerSec = 0.80f
         playerCheckpointState.portalScale = 1.0f
         playerCheckpointState.respawnCount++
+        narrowBridgesCrossedWithoutFall = 0
+        wasOnNarrowBridge = false
 
         if (currentMode == GameMode.TIME_ATTACK) {
             elapsedSec += timeAttackPenaltySec
@@ -702,7 +798,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         vz = cos(rad).toFloat() * 17.0f
         vy = maxOf(vy, 1.6f)
         dashCooldown = 2.4f
+        dashesUsedInRun++
         squashY = 1.26f
+        pickupAuraTimer = 0.42f
+        pickupAuraColor = Rgba.fromHex(0x00E5FF)
         listener?.onSfx("dash")
         listener?.onHaptic(true)
         spawnBurst(px, py + 0.7f, pz, 12, Rgba.fromHex(0x00E5FF), 4.0f)
@@ -847,6 +946,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                     val cycle = (platformTime + rp.def.phase) % 4.5f
                     rp.active = cycle < 3.0f
                     rp.warningPulse = if (cycle in 2.1f..3.0f) ((sin(platformTime * 22f) + 1f) * 0.5f) else 0f
+                    if (cycle in 2.1f..2.3f && abs(rp.curZ - pz) < 7.5f && warnSfxCooldown <= 0f) {
+                        warnSfxCooldown = 0.85f
+                        listener?.onSfx("hazard_warn")
+                    }
                 }
                 PlatformType.FALLING -> {
                     if (rp.fallTimer >= 0f) {
@@ -858,6 +961,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                             }
                         } else {
                             rp.warningPulse = (sin(platformTime * 30f) + 1f) * 0.5f
+                            if (rp.fallTimer < 0.15f && warnSfxCooldown <= 0f) {
+                                warnSfxCooldown = 0.75f
+                                listener?.onSfx("hazard_warn")
+                            }
                         }
                         if (rp.fallTimer > 4.2f) {
                             rp.fallTimer = -1f
@@ -900,6 +1007,12 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         if (dashCooldown > 0f) dashCooldown -= dt
         if (hitStunTimer > 0f) hitStunTimer -= dt
         if (landTimer > 0f) landTimer -= dt
+        if (warnSfxCooldown > 0f) warnSfxCooldown -= dt
+        if (shieldTimer > 0f) shieldTimer = (shieldTimer - dt).coerceAtLeast(0f)
+        if (magnetTimer > 0f) magnetTimer = (magnetTimer - dt).coerceAtLeast(0f)
+        if (wingsTimer > 0f) wingsTimer = (wingsTimer - dt).coerceAtLeast(0f)
+        if (pickupAuraTimer > 0f) pickupAuraTimer = (pickupAuraTimer - dt).coerceAtLeast(0f)
+        if (cameraShakeTimer > 0f) cameraShakeTimer = (cameraShakeTimer - dt).coerceAtLeast(0f)
         squashY += (1f - squashY) * minOf(1f, dt * 12f)
 
         // Camera-relative movement input
@@ -920,26 +1033,49 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         var standingPlatform: RuntimePlatform? = null
 
         if (hitStunTimer <= 0f && diveTimer <= 0f) {
-            val maxSpeed = 8.4f
+            val charSpeedScale = when (selectedSkin.id) {
+                "kid_ahmed" -> 1.03f
+                "salma_heroine" -> 0.99f
+                else -> 1.0f
+            }
+            val maxSpeed = 8.4f * charSpeedScale
             val targetVx = inputX * maxSpeed
             val targetVz = inputZ * maxSpeed
             val accel = if (grounded) 38f * surfaceFriction else 16f
             val decel = if (grounded) 24f * surfaceFriction else 5f
+            val prevSpeed = sqrt(vx * vx + vz * vz)
 
             if (mag > 0.08f) {
                 vx += (targetVx - vx) * minOf(1f, accel * dt)
                 vz += (targetVz - vz) * minOf(1f, accel * dt)
+                val newSpeed = sqrt(vx * vx + vz * vz)
+                val speedDelta = (newSpeed - prevSpeed) / dt.coerceAtLeast(0.005f)
+                val targetPitch = (speedDelta * 0.22f).coerceIn(-6f, 8f)
+                playerAccelPitchDeg += (targetPitch - playerAccelPitchDeg) * minOf(1f, dt * 10f)
                 val targetYaw = Math.toDegrees(atan2(inputX.toDouble(), inputZ.toDouble())).toFloat()
+                val yawDelta = ((targetYaw - playerYaw + 540f) % 360f) - 180f
+                playerTurnLeanDeg += (yawDelta.coerceIn(-25f, 25f) * 0.48f - playerTurnLeanDeg) * minOf(1f, dt * 10f)
                 playerYaw = lerpAngle(playerYaw, targetYaw, minOf(1f, dt * 13f))
             } else {
                 vx *= (1f - minOf(1f, decel * dt))
                 vz *= (1f - minOf(1f, decel * dt))
+                val targetPitch = if (prevSpeed > 1.2f) -4.5f else 0f
+                playerAccelPitchDeg += (targetPitch - playerAccelPitchDeg) * minOf(1f, dt * 10f)
+                playerTurnLeanDeg *= (1f - minOf(1f, dt * 10f))
             }
+        } else {
+            playerTurnLeanDeg *= (1f - minOf(1f, dt * 8f))
+            playerAccelPitchDeg *= (1f - minOf(1f, dt * 8f))
         }
 
         // Jump execution (coyote + buffer)
         if (jumpBufferTimer > 0f && (grounded || coyoteTimer > 0f) && hitStunTimer <= 0f) {
-            vy = 11.6f
+            val baseJumpVy = when (selectedSkin.id) {
+                "salma_heroine" -> 11.82f
+                "kid_ahmed" -> 11.52f
+                else -> 11.65f
+            }
+            vy = if (wingsTimer > 0f) 13.4f else baseJumpVy
             grounded = false
             coyoteTimer = 0f
             jumpBufferTimer = 0f
@@ -950,8 +1086,10 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             spawnBurst(px, py + 0.1f, pz, 7, Rgba(1f, 1f, 1f, 0.9f), 2.2f)
         }
 
-        // Gravity
-        val gravity = 28.5f * currentWorld.gravityMultiplier
+        // Gravity (Hermes Glide Wings softens downward fall gravity by 48% for smooth air-gliding)
+        val charFallFactor = if (selectedSkin.id == "salma_heroine" && vy < 0f) 0.96f else 1.0f
+        val glideFactor = if (wingsTimer > 0f && vy < 0f) 0.52f else charFallFactor
+        val gravity = 28.5f * currentWorld.gravityMultiplier * glideFactor
         vy -= gravity * dt
 
         val prevY = py
@@ -964,10 +1102,16 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             triggerIndividualRespawnForPlayer()
         }
 
+        if (!grounded && py > airbornePeakY) {
+            airbornePeakY = py
+        }
+
         // Platform collision resolution (generous rounded-character cylinder/AABB + ledge step-up)
         val wasGrounded = grounded
         grounded = false
         val playerRadius = 0.36f
+        val prevVyBeforeLanding = vy
+        var bestShadowFloorY = Float.NaN
         for (rp in platforms) {
             if (!rp.active) continue
             val halfW = rp.def.w * 0.5f + playerRadius
@@ -976,6 +1120,9 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             val botY = rp.curY - rp.def.h * 0.5f
 
             if (abs(px - rp.curX) <= halfW && abs(pz - rp.curZ) <= halfD) {
+                if (topY <= py + 0.15f && (bestShadowFloorY.isNaN() || topY > bestShadowFloorY)) {
+                    bestShadowFloorY = topY
+                }
                 // Landing on top or smooth ledge step-up within 0.18m
                 if ((vy <= 0.6f && prevY >= topY - 0.35f && py <= topY + 0.12f) ||
                     (py >= topY - 0.18f && py < topY && vy > -2.5f)
@@ -985,6 +1132,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                     grounded = true
                     coyoteTimer = 0.14f
                     standingPlatform = rp
+                    bestShadowFloorY = topY
 
                     // Carry player on moving platform
                     px += (rp.curX - rp.prevX)
@@ -992,14 +1140,77 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                     pz += (rp.curZ - rp.prevZ)
 
                     if (!wasGrounded) {
-                        landTimer = 0.12f
-                        squashY = 0.78f
-                        listener?.onSfx("land")
-                        spawnBurst(px, py + 0.05f, pz, 5, Rgba(0.9f, 0.95f, 1f, 0.8f), 1.6f)
+                        val dropHeight = (airbornePeakY - topY).coerceAtLeast(0f)
+                        val impactSpeed = abs(prevVyBeforeLanding)
+                        val isHeavyLanding = dropHeight > 2.2f || impactSpeed > 13.5f
+                        landTimer = if (isHeavyLanding) 0.16f else 0.12f
+                        squashY = if (isHeavyLanding) 0.72f else 0.78f
+                        if (cameraShakeEnabled) {
+                            cameraShakeTimer = if (isHeavyLanding) 0.18f else 0.12f
+                            cameraShakeIntensity = if (isHeavyLanding) 0.15f else 0.09f
+                        }
+                        // Surface-matched landing particle color (sand/stone dust, snow/ice, metal sparks, water spray)
+                        val surfaceDustCol = when (currentWorld.id) {
+                            4 -> Rgba.fromHex(0xFDE68A) // Golden sand dust
+                            5, 8 -> Rgba.fromHex(0xBAE6FD) // Ice / frost crystals
+                            3, 9 -> Rgba.fromHex(0x38BDF8) // Electric / metallic sparks
+                            7 -> Rgba.fromHex(0x6EE7B7) // Garden leaf/moss dust
+                            10 -> Rgba.fromHex(0xFB923C) // Ancient ruins ember dust
+                            else -> Rgba(0.92f, 0.96f, 1f, 0.85f)
+                        }
+                        // Perfect Landing check: centered on platform after an actual jump
+                        val centerDistX = abs(px - rp.curX)
+                        val centerDistZ = abs(pz - rp.curZ)
+                        val isRealJump = dropHeight > 0.75f
+                        if (isRealJump && centerDistX <= rp.def.w * 0.28f && centerDistZ <= rp.def.d * 0.38f) {
+                            perfectLandingsInRun++
+                            listener?.onSfx("land_perfect")
+                            if (checkpointBannerTimer <= 0.3f) {
+                                checkpointBannerTimer = 1.15f
+                                checkpointBannerText = "PERFECT LANDING! ★ ($perfectLandingsInRun)"
+                            }
+                            spawnBurst(px, py + 0.12f, pz, 8, Rgba.fromHex(0xFFD22B), 2.6f)
+                            spawnBurst(px, py + 0.06f, pz, 5, surfaceDustCol, 1.9f)
+                        } else {
+                            val landSfx = when {
+                                isHeavyLanding -> "land_heavy"
+                                dropHeight < 0.45f -> "land_soft"
+                                else -> "land"
+                            }
+                            listener?.onSfx(landSfx)
+                            spawnBurst(px, py + 0.05f, pz, if (isHeavyLanding) 8 else 5, surfaceDustCol, if (isHeavyLanding) 2.2f else 1.5f)
+                        }
+                        airbornePeakY = topY
+                    }
+
+                    // Gentle rhythmic lateral crosswind on high-altitude Narrow Bridges in Worlds 3 & 9 (fair & learnable)
+                    if (rp.def.type == PlatformType.NARROW_BRIDGE && (currentWorld.id == 3 || currentWorld.id == 9) && currentLevel.number >= 12) {
+                        val windGust = sin(worldTime * 1.8f) * 1.35f
+                        px += windGust * dt
+                    }
+
+                    // Track Narrow Bridge crossing without falling
+                    if (rp.def.type == PlatformType.NARROW_BRIDGE) {
+                        wasOnNarrowBridge = true
+                        lastNarrowBridgeZ = rp.curZ
+                    } else if (wasOnNarrowBridge && rp.curZ < lastNarrowBridgeZ - 2.0f) {
+                        wasOnNarrowBridge = false
+                        narrowBridgesCrossedWithoutFall++
                     }
 
                     // Special platform effects
                     when (rp.def.type) {
+                        PlatformType.SECRET_PATH -> {
+                            if (!secretPathFoundInRun) {
+                                secretPathFoundInRun = true
+                                checkpointBannerTimer = 2.2f
+                                checkpointBannerText = "SECRET PATH DISCOVERED! ★"
+                                listener?.onSfx("checkpoint")
+                                listener?.onHaptic(true)
+                                spawnBurst(px, py + 0.8f, pz, 16, Rgba.fromHex(0xFFD22B), 4.0f)
+                                spawnBurst(px, py + 1.1f, pz, 12, Rgba.fromHex(0x00E5FF), 3.6f)
+                            }
+                        }
                         PlatformType.BOUNCE_PAD -> {
                             vy = 16.5f
                             grounded = false
@@ -1020,13 +1231,27 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                             surfaceFriction = 0.32f
                         }
                         PlatformType.FALLING -> {
-                            if (rp.fallTimer < 0f) rp.fallTimer = 0f
+                            if (rp.fallTimer < 0f) {
+                                rp.fallTimer = 0f
+                                listener?.onSfx("platform_crack")
+                                listener?.onHaptic(false)
+                            }
                         }
                         PlatformType.FINISH -> {
                             if (!runFinished) {
                                 runFinished = true
                                 playerCheckpointState.finished = true
                                 playerFinishOrder = nextFinishOrder++
+                                currentRunGhostFrames += GhostFrame(elapsedSec, px, py, pz, playerYaw)
+                                if (currentLevel.number in 1..100 && currentRunGhostFrames.size >= 4) {
+                                    synchronized(bestGhostByLevel) {
+                                        val prev = bestGhostByLevel[currentLevel.number]
+                                        val prevTime = prev?.lastOrNull()?.timeSec ?: Float.MAX_VALUE
+                                        if (elapsedSec < prevTime) {
+                                            bestGhostByLevel[currentLevel.number] = currentRunGhostFrames.toList()
+                                        }
+                                    }
+                                }
                                 val rank = if (currentMode == GameMode.RIVAL_RACE) playerFinishOrder else 1
                                 val totalR = if (currentMode == GameMode.RIVAL_RACE) rivals.size + 1 else 1
                                 listener?.onSfx("victory")
@@ -1034,14 +1259,20 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                                 spawnBurst(px, py + 1.8f, pz, 30, Rgba.fromHex(0xFFD22B), 5.5f)
                                 spawnBurst(px, py + 2.1f, pz, 25, Rgba.fromHex(0x00D4FF), 5.5f)
                                 listener?.onLevelWon(
-                                    currentLevel.number,
-                                    (elapsedSec * 1000f).toLong(),
-                                    coinsCollected,
-                                    maxDistanceM,
-                                    obstaclesPassed,
-                                    rank,
-                                    totalR,
-                                    jumpsInRun
+                                    levelNumber = currentLevel.number,
+                                    timeMs = (elapsedSec * 1000f).toLong(),
+                                    coinsCollected = coinsCollected,
+                                    distanceM = maxDistanceM,
+                                    obstaclesPassed = obstaclesPassed,
+                                    raceRank = rank,
+                                    totalRacers = totalR,
+                                    jumpsInRun = jumpsInRun,
+                                    perfectLandings = perfectLandingsInRun,
+                                    secretPathFound = secretPathFoundInRun,
+                                    narrowBridgesCrossed = narrowBridgesCrossedWithoutFall,
+                                    dashUsed = dashesUsedInRun > 0,
+                                    respawnCount = playerCheckpointState.respawnCount,
+                                    chestsOpened = chestsOpenedInRun
                                 )
                             }
                         }
@@ -1064,6 +1295,8 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                 }
             }
         }
+        shadowFloorY = bestShadowFloorY
+        shadowHeightGap = if (!bestShadowFloorY.isNaN()) (py - bestShadowFloorY).coerceAtLeast(0f) else 0f
 
         // Obstacle collisions & passed tracking
         var passedCount = 0
@@ -1083,21 +1316,112 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             }
         }
 
-        // Coins collection
+        // Coins collection + Active Coin Magnet pull
         for (i in 0 until coins.size) {
             val rc = coins[i]
             if (rc.collected) continue
-            val dx = px - rc.def.x
-            val dy = (py + 0.7f) - rc.def.y
-            val dz = pz - rc.def.z
-            if (dx * dx + dy * dy + dz * dz < 1.85f) {
+            var dx = px - rc.curX
+            var dy = (py + 0.7f) - rc.curY
+            var dz = pz - rc.curZ
+            val distSq = dx * dx + dy * dy + dz * dz
+            if (magnetTimer > 0f && distSq < 72.25f) { // 8.5m magnet radius
+                val dist = sqrt(distSq).coerceAtLeast(0.05f)
+                val pullSpeed = 19.5f * dt
+                rc.curX += (dx / dist) * minOf(dist, pullSpeed)
+                rc.curY += (dy / dist) * minOf(dist, pullSpeed)
+                rc.curZ += (dz / dist) * minOf(dist, pullSpeed)
+                dx = px - rc.curX
+                dy = (py + 0.7f) - rc.curY
+                dz = pz - rc.curZ
+            }
+            if (dx * dx + dy * dy + dz * dz < 1.95f) {
                 rc.collected = true
                 coinsCollected++
                 listener?.onSfx("coin")
                 listener?.onHaptic(false)
-                spawnBurst(rc.def.x, rc.def.y, rc.def.z, 10, Rgba.fromHex(0xFFD22B), 3.0f)
+                spawnBurst(rc.curX, rc.curY, rc.curZ, 10, Rgba.fromHex(0xFFD22B), 3.0f)
             }
         }
+
+        // 3D Power-Ups collection (Aegis Shield, Coin Magnet, Hermes Glide Wings)
+        for (i in 0 until powerUps.size) {
+            val pu = powerUps[i]
+            if (pu.collected) continue
+            val dx = px - pu.def.x
+            val dy = (py + 0.75f) - pu.def.y
+            val dz = pz - pu.def.z
+            if (dx * dx + dy * dy + dz * dz < 2.25f) {
+                pu.collected = true
+                pickupAuraTimer = 0.48f
+                when (pu.def.type) {
+                    PowerUpType.SHIELD -> {
+                        shieldTimer = 12.0f
+                        pickupAuraColor = Rgba.fromHex(0x00E5FF)
+                        checkpointBannerTimer = 1.8f
+                        checkpointBannerText = "AEGIS GOLDEN SHIELD ACTIVATED! 🛡️"
+                        listener?.onSfx("powerup_shield")
+                        spawnBurst(pu.def.x, pu.def.y, pu.def.z, 16, Rgba.fromHex(0x00E5FF), 4.0f)
+                    }
+                    PowerUpType.MAGNET -> {
+                        magnetTimer = 9.5f
+                        pickupAuraColor = Rgba.fromHex(0xFFD22B)
+                        checkpointBannerTimer = 1.8f
+                        checkpointBannerText = "ROYAL COIN MAGNET ACTIVATED! 🧲"
+                        listener?.onSfx("powerup_magnet")
+                        spawnBurst(pu.def.x, pu.def.y, pu.def.z, 16, Rgba.fromHex(0xFFD22B), 4.0f)
+                    }
+                    PowerUpType.WINGS -> {
+                        wingsTimer = 8.5f
+                        pickupAuraColor = Rgba.fromHex(0x2EE58D)
+                        checkpointBannerTimer = 1.8f
+                        checkpointBannerText = "HERMES GLIDE WINGS ACTIVATED! 🪽"
+                        listener?.onSfx("powerup_wings")
+                        spawnBurst(pu.def.x, pu.def.y, pu.def.z, 16, Rgba.fromHex(0x2EE58D), 4.0f)
+                    }
+                }
+                listener?.onHaptic(true)
+            }
+        }
+
+        // Hidden Royal Treasure Chests & Boss Gate Chests (Wooden, Metallic, Magic Rare, Royal Event Boss)
+        for (i in 0 until treasureChests.size) {
+            val tc = treasureChests[i]
+            if (tc.opened) {
+                tc.openAnim = (tc.openAnim + dt * 3.2f).coerceAtMost(1f)
+                continue
+            }
+            val dx = px - tc.def.x
+            val dy = (py + 0.65f) - tc.def.y
+            val dz = pz - tc.def.z
+            if (dx * dx + dy * dy + dz * dz < 2.65f) {
+                tc.opened = true
+                tc.openAnim = 0.05f
+                chestsOpenedInRun++
+                coinsCollected += tc.def.bonusCoins
+                pickupAuraTimer = 0.65f
+                pickupAuraColor = Rgba.fromHex(tc.def.tier.colorHex)
+                checkpointBannerTimer = 2.4f
+                checkpointBannerText = "${tc.def.tier.titleEn.uppercase()}! +${tc.def.bonusCoins} COINS ★"
+                val chestSfx = when (tc.def.tier) {
+                    ChestTier.WOODEN -> "chest_wooden"
+                    ChestTier.METALLIC -> "chest_metal"
+                    ChestTier.MAGIC_RARE -> "chest_magic"
+                    ChestTier.EVENT_BOSS -> "chest_royal"
+                }
+                listener?.onSfx(chestSfx)
+                listener?.onHaptic(true)
+                spawnBurst(tc.def.x, tc.def.y + 0.8f, tc.def.z, 22, Rgba.fromHex(tc.def.tier.colorHex), 4.5f)
+                spawnBurst(tc.def.x, tc.def.y + 1.1f, tc.def.z, 14, Rgba.fromHex(0xFFD22B), 4.0f)
+            }
+        }
+
+        // Record current run Ghost Frame & update Personal Best Ghost Racer playback
+        ghostRecordTimer += dt
+        if (ghostRecordTimer >= 0.10f && currentRunGhostFrames.size < 1800) {
+            ghostRecordTimer = 0f
+            currentRunGhostFrames += GhostFrame(elapsedSec, px, py, pz, playerYaw)
+        }
+        updateGhostPlayback()
 
         // Distance & Race Progress tracking
         val distNow = (-pz).coerceAtLeast(0f)
@@ -1114,7 +1438,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             triggerIndividualRespawnForPlayer()
         }
 
-        // Running dust & equipped trail particles
+        // Running dust, equipped trail particles, and surface-specific footsteps / slide sounds
         val horizSpeed = sqrt(vx * vx + vz * vz)
         if (grounded && horizSpeed > 2.2f) {
             trailTimer += dt
@@ -1129,6 +1453,65 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                 }
                 particles += Particle(px, py + 0.12f, pz, -vx * 0.15f, 0.8f, -vz * 0.15f, 0.42f, 0.42f, 0.24f, trailCol)
             }
+
+            if (standingPlatform?.def?.type == PlatformType.SLIPPERY) {
+                slideSfxTimer += dt
+                if (slideSfxTimer >= 0.38f) {
+                    slideSfxTimer = 0f
+                    listener?.onSfx("slide")
+                }
+            } else {
+                footstepTimer += dt * (horizSpeed / 6.0f).coerceIn(0.7f, 1.5f)
+                if (footstepTimer >= 0.32f) {
+                    footstepTimer = 0f
+                    val stepSfx = when (currentWorld.id) {
+                        4 -> "step_sand"
+                        5, 8 -> "step_ice"
+                        3, 9 -> "step_metal"
+                        7 -> if (standingPlatform?.def?.type == PlatformType.NARROW_BRIDGE) "step_wood" else "step_grass"
+                        else -> "step_stone"
+                    }
+                    listener?.onSfx(stepSfx)
+                }
+            }
+        } else {
+            footstepTimer = 0.22f
+        }
+
+        // Check if any nearby platform or obstacle is in active hazard warning state
+        var nearWarn = standingPlatform != null && standingPlatform.warningPulse > 0.1f
+        if (!nearWarn) {
+            for (i in 0 until activeObstacles.size) {
+                val obs = activeObstacles[i]
+                if (abs(obs.z - pz) < 6.5f) {
+                    nearWarn = true
+                    break
+                }
+            }
+        }
+        hazardWarningActive = nearWarn
+
+        // Living world ambient particles (fluttering leaves in Gardens, glowing crystal motes in Caves, magma embers in Ruins)
+        val maxParticles = when (graphicsQuality) {
+            GraphicsQuality.LOW -> 35
+            GraphicsQuality.MEDIUM -> 80
+            GraphicsQuality.HIGH -> 150
+        }
+        ambientParticleTimer += dt
+        val ambientInterval = if (graphicsQuality == GraphicsQuality.HIGH) 0.14f else 0.26f
+        if (graphicsQuality != GraphicsQuality.LOW && ambientParticleTimer >= ambientInterval && particles.size < maxParticles - 8) {
+            ambientParticleTimer = 0f
+            val ambCol = when (currentWorld.id) {
+                7 -> if (Random.nextBoolean()) Rgba.fromHex(0x2EE58D) else Rgba.fromHex(0xFFD22B) // Fluttering leaves
+                8 -> Rgba.fromHex(0x38BDF8) // Crystal cave motes
+                10 -> Rgba.fromHex(0xFF5400) // Ancient ruins lava embers
+                else -> Rgba.fromHex(0x00E5FF)
+            }
+            val ax = px + (Random.nextFloat() - 0.5f) * 14f
+            val ay = py + 1.5f + Random.nextFloat() * 3.5f
+            val az = pz - Random.nextFloat() * 18f
+            val avy = if (currentWorld.id == 10) 2.2f else -0.6f
+            particles += Particle(ax, ay, az, (Random.nextFloat() - 0.5f) * 1.4f, avy, 0.4f, 0.95f, 0.95f, 0.18f, ambCol)
         }
 
         // Animation state selection
@@ -1393,6 +1776,7 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             activeObstacles.addAll(res.obstacles)
             activeCheckpoints.addAll(res.checkpoints)
             for (c in res.coins) coins += RuntimeCoin(c)
+            for (pu in res.powerUps) powerUps += RuntimePowerUp(pu)
             endlessNextY = res.nextY
             endlessNextZ = res.nextZ
         }
@@ -1407,7 +1791,62 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
             if (activeObstacles[i].z > cullZ) activeObstacles.removeAt(i)
         }
         for (i in coins.size - 1 downTo 0) {
-            if (coins[i].def.z > cullZ) coins.removeAt(i)
+            if (coins[i].curZ > cullZ) coins.removeAt(i)
+        }
+        for (i in powerUps.size - 1 downTo 0) {
+            if (powerUps[i].def.z > cullZ) powerUps.removeAt(i)
+        }
+    }
+
+    private fun updateGhostPlayback() {
+        val frames = activeGhostFrames
+        if (frames.size >= 2) {
+            val lastFrame = frames.last()
+            if (elapsedSec > lastFrame.timeSec + 0.5f) {
+                ghostActive = false
+                return
+            }
+            ghostActive = true
+            var idx = 0
+            while (idx < frames.size - 2 && frames[idx + 1].timeSec < elapsedSec) {
+                idx++
+            }
+            val f0 = frames[idx]
+            val f1 = frames[idx + 1]
+            val span = (f1.timeSec - f0.timeSec).coerceAtLeast(0.001f)
+            val alpha = ((elapsedSec - f0.timeSec) / span).coerceIn(0f, 1f)
+            ghostX = f0.x + (f1.x - f0.x) * alpha
+            ghostY = f0.y + (f1.y - f0.y) * alpha
+            ghostZ = f0.z + (f1.z - f0.z) * alpha
+            ghostYaw = lerpAngle(f0.yaw, f1.yaw, alpha)
+            return
+        }
+        // In TIME_ATTACK mode, if no personal best ghost exists yet, show a Target Par-Time Pace Ghost!
+        if (currentMode == GameMode.TIME_ATTACK && platforms.isNotEmpty()) {
+            val goalSec = (WorldProgressionGraph.goalTimeMsForLevel(currentLevel.number) / 1000f).coerceAtLeast(18f)
+            val frac = (elapsedSec / goalSec).coerceIn(0f, 1f)
+            if (frac < 1f) {
+                ghostActive = true
+                ghostZ = currentLevel.startZ + (currentLevel.finishZ - currentLevel.startZ) * frac
+                var bestPlat: RuntimePlatform? = null
+                var minDz = Float.MAX_VALUE
+                for (i in 0 until platforms.size) {
+                    val rp = platforms[i]
+                    if (rp.def.type == PlatformType.SECRET_PATH) continue
+                    val dz = abs(rp.curZ - ghostZ)
+                    if (dz < minDz) {
+                        minDz = dz
+                        bestPlat = rp
+                    }
+                }
+                ghostX = bestPlat?.curX ?: 0f
+                ghostY = (bestPlat?.let { it.curY + it.def.h * 0.5f } ?: currentLevel.startY) + abs(sin(elapsedSec * 4.5f)) * 0.45f
+                ghostYaw = 180f
+            } else {
+                ghostActive = false
+            }
+        } else {
+            ghostActive = false
         }
     }
 
@@ -1422,80 +1861,271 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
 
     private fun checkObstacleCollision(obs: ObstacleDef) {
         if (hitStunTimer > 0.15f) return
+        // Broad-phase Z cull (skip obstacles more than 9m away)
+        if (abs(pz - obs.z) > 9.0f) return
+
         val t = obstacleTime * obs.speed + obs.phase
-        var ox = obs.x
-        var oy = obs.y
-        var oz = obs.z
-        var radius = 0.85f * obs.scale
+        val playerCenterY = py + 0.65f
+        val playerRadius = 0.36f
 
         when (obs.type) {
-            ObstacleType.ROTATING_HAMMER, ObstacleType.ROTATING_BEAM, ObstacleType.SPINNING_BLADE -> {
+            ObstacleType.ROTATING_HAMMER -> {
+                // 1) Center turret base & pillar
+                val turretDx = px - obs.x
+                val turretDz = pz - obs.z
+                val turretR = 0.62f * obs.scale + playerRadius
+                if (turretDx * turretDx + turretDz * turretDz < turretR * turretR &&
+                    py < obs.y + 2.15f * obs.scale && py + 1.35f > obs.y
+                ) {
+                    applyKnockback(turretDx, turretDz, 10.5f, 5.0f)
+                    return
+                }
+                // 2) Full rotating horizontal arm + heavy war-mallet head at 2.55f * obs.scale
                 val angle = t
-                val armLen = obs.range * 0.82f
-                val hx = obs.x + cos(angle) * armLen * 0.65f
-                val hz = obs.z + sin(angle) * armLen * 0.65f
+                val dirX = cos(angle)
+                val dirZ = sin(angle)
+                val hy = obs.y + 0.85f
+                if (abs(playerCenterY - hy) < 1.05f * obs.scale) {
+                    // Check samples along the shaft from center to tip
+                    val shaftSamples = floatArrayOf(0.55f, 1.05f, 1.55f, 2.05f, 2.55f)
+                    for (dist in shaftSamples) {
+                        val cx = obs.x + dirX * (dist * obs.scale)
+                        val cz = obs.z + dirZ * (dist * obs.scale)
+                        val hitR = (if (dist >= 2.0f) 0.92f else 0.56f) * obs.scale + playerRadius
+                        val dx = px - cx
+                        val dz = pz - cz
+                        if (dx * dx + dz * dz < hitR * hitR) {
+                            applyKnockback(dx, dz, 11.8f, 5.6f)
+                            return
+                        }
+                    }
+                }
+                return
+            }
+
+            ObstacleType.ROTATING_BEAM -> {
+                // 1) Center turret pillar
+                val turretDx = px - obs.x
+                val turretDz = pz - obs.z
+                val turretR = 0.60f * obs.scale + playerRadius
+                if (turretDx * turretDx + turretDz * turretDz < turretR * turretR &&
+                    py < obs.y + 1.75f * obs.scale && py + 1.35f > obs.y
+                ) {
+                    applyKnockback(turretDx, turretDz, 10.5f, 5.0f)
+                    return
+                }
+                // 2) Full two-sided beam (-halfLen .. +halfLen). Previously only positive half was checked!
+                val angle = t
+                val halfLen = obs.range * 0.95f
                 val hy = obs.y + 0.75f
-                // Check distance along rotating arm
-                for (frac in listOf(0.35f, 0.68f, 0.95f)) {
-                    val cx = obs.x + cos(angle) * armLen * frac
-                    val cz = obs.z + sin(angle) * armLen * frac
-                    val dx = px - cx
-                    val dz = pz - cz
-                    val dy = (py + 0.65f) - hy
-                    if (dx * dx + dz * dz < 0.95f * obs.scale && abs(dy) < 1.05f) {
+                if (abs(playerCenterY - hy) < 0.88f * obs.scale) {
+                    val dirX = cos(angle)
+                    val dirZ = sin(angle)
+                    val relX = px - obs.x
+                    val relZ = pz - obs.z
+                    // Project player onto the rotating beam segment [-halfLen, +halfLen]
+                    val proj = (relX * dirX + relZ * dirZ).coerceIn(-halfLen, halfLen)
+                    val closestX = obs.x + dirX * proj
+                    val closestZ = obs.z + dirZ * proj
+                    val dx = px - closestX
+                    val dz = pz - closestZ
+                    val beamRadius = 0.36f * obs.scale + playerRadius
+                    if (dx * dx + dz * dz < beamRadius * beamRadius) {
                         applyKnockback(dx, dz, 11.5f, 5.5f)
                         return
                     }
                 }
                 return
             }
+
+            ObstacleType.SPINNING_BLADE -> {
+                // 1) Center turret pillar
+                val turretDx = px - obs.x
+                val turretDz = pz - obs.z
+                val turretR = 0.60f * obs.scale + playerRadius
+                if (turretDx * turretDx + turretDz * turretDz < turretR * turretR &&
+                    py < obs.y + 1.65f * obs.scale && py + 1.35f > obs.y
+                ) {
+                    applyKnockback(turretDx, turretDz, 10.5f, 5.0f)
+                    return
+                }
+                // 2) Both perpendicular cross-blades (0°/180° AND 90°/270°). Previously only 1 half-arm was checked!
+                val halfLen = obs.range * 0.97f
+                val hy = obs.y + 0.75f
+                if (abs(playerCenterY - hy) < 0.82f * obs.scale) {
+                    val relX = px - obs.x
+                    val relZ = pz - obs.z
+                    val bladeRadius = 0.38f * obs.scale + playerRadius
+                    for (axisOffset in floatArrayOf(0f, (Math.PI * 0.5).toFloat())) {
+                        val a = t + axisOffset
+                        val dirX = cos(a)
+                        val dirZ = sin(a)
+                        val proj = (relX * dirX + relZ * dirZ).coerceIn(-halfLen, halfLen)
+                        val closestX = obs.x + dirX * proj
+                        val closestZ = obs.z + dirZ * proj
+                        val dx = px - closestX
+                        val dz = pz - closestZ
+                        if (dx * dx + dz * dz < bladeRadius * bladeRadius) {
+                            applyKnockback(dx, dz, 11.8f, 5.6f)
+                            return
+                        }
+                    }
+                }
+                return
+            }
+
             ObstacleType.ROLLING_BALL -> {
-                ox = obs.x + sin(t) * obs.range
-                oy = obs.y
-                oz = obs.z
-                radius = 1.15f * obs.scale
+                val ox = obs.x + sin(t) * obs.range
+                val oy = obs.y
+                val oz = obs.z
+                val hitR = 1.05f * obs.scale + playerRadius
+                val dx = px - ox
+                val dy = playerCenterY - oy
+                val dz = pz - oz
+                if (dx * dx + dy * dy + dz * dz < hitR * hitR) {
+                    applyKnockback(dx, dz, 11.5f, 5.8f)
+                }
+                return
             }
+
             ObstacleType.SWINGING_PENDULUM, ObstacleType.GIANT_SWINGER -> {
+                // 1) Twin side marble columns at obs.x ± 3.2f
+                for (side in floatArrayOf(-3.2f, 3.2f)) {
+                    val colX = obs.x + side
+                    val dx = px - colX
+                    val dz = pz - obs.z
+                    val colR = 0.48f + playerRadius
+                    if (dx * dx + dz * dz < colR * colR && py < obs.y + 4.5f && py + 1.35f > obs.y) {
+                        applyKnockback(dx, dz, 9.5f, 4.2f)
+                        return
+                    }
+                }
+                // 2) Swinging crescent battle-axe head AND lower pendulum rod
                 val swing = sin(t) * 1.1f
-                ox = obs.x + sin(swing) * 3.4f * obs.scale
-                oy = obs.y + 4.2f - cos(swing) * 3.4f * obs.scale
-                radius = 1.1f * obs.scale
+                val pivotY = obs.y + 4.2f
+                for (rodFrac in floatArrayOf(0.55f, 0.78f, 1.0f)) {
+                    val len = 3.4f * obs.scale * rodFrac
+                    val bx = obs.x + sin(swing) * len
+                    val by = pivotY - cos(swing) * len
+                    val hitX = (if (rodFrac >= 0.95f) 1.32f else 0.45f) * obs.scale + playerRadius
+                    val hitY = (if (rodFrac >= 0.95f) 0.95f else 0.55f) * obs.scale + 0.55f
+                    val hitZ = 0.45f * obs.scale + playerRadius
+                    if (abs(px - bx) < hitX && abs(playerCenterY - by) < hitY && abs(pz - obs.z) < hitZ) {
+                        val dx = px - bx
+                        val dz = if (abs(pz - obs.z) < 0.05f) 0.6f else (pz - obs.z)
+                        applyKnockback(dx, dz, 12.0f, 5.8f)
+                        return
+                    }
+                }
+                return
             }
+
             ObstacleType.MOVING_WALL, ObstacleType.SLIDING_OBSTACLE, ObstacleType.PUSHER -> {
-                ox = obs.x + sin(t) * obs.range
-                oy = obs.y + 0.85f
-                radius = 1.1f * obs.scale
+                // Exact 3D box bounds matching drawBlock(ox, obs.y + 0.92f, obs.z, 1.95f * scale, 1.85f * scale, 1.35f * scale)
+                val ox = obs.x + sin(t) * obs.range
+                val oy = obs.y + 0.92f
+                val halfW = 0.98f * obs.scale + playerRadius
+                val halfH = 0.93f * obs.scale + 0.55f
+                val halfD = 0.68f * obs.scale + playerRadius
+                if (abs(px - ox) < halfW && abs(playerCenterY - oy) < halfH && abs(pz - obs.z) < halfD) {
+                    val dx = px - ox
+                    val dz = pz - obs.z
+                    applyKnockback(dx, dz, 11.2f, 5.5f)
+                }
+                return
             }
+
             ObstacleType.JUMPING_BLOCK -> {
-                oy = obs.y + 0.7f + abs(sin(t)) * 2.4f
-                radius = 1.0f * obs.scale
+                // Exact 3D box bounds matching drawBlock(obs.x, oy, obs.z, 1.85f * scale, 1.45f * scale, 1.45f * scale)
+                val oy = obs.y + 0.7f + abs(sin(t)) * 2.4f
+                val halfW = 0.93f * obs.scale + playerRadius
+                val halfH = 0.85f * obs.scale + 0.55f
+                val halfD = 0.73f * obs.scale + playerRadius
+                if (abs(px - obs.x) < halfW && abs(playerCenterY - oy) < halfH && abs(pz - obs.z) < halfD) {
+                    applyKnockback(px - obs.x, pz - obs.z, 11.0f, 5.8f)
+                }
+                return
             }
+
             ObstacleType.FIRE_JET -> {
-                val jetActive = sin(t) > 0.1f
-                if (!jetActive) return
-                oy = obs.y + 1.2f
-                radius = 0.85f * obs.scale
+                // 1) Solid floor nozzle base
+                val dx = px - obs.x
+                val dz = pz - obs.z
+                val baseR = 0.62f + playerRadius
+                if (dx * dx + dz * dz < baseR * baseR && py < obs.y + 0.48f && py + 1.35f > obs.y) {
+                    applyKnockback(dx, dz, 9.0f, 4.5f)
+                    return
+                }
+                // 2) Active vertical flame column (from obs.y to obs.y + 2.5f * scale)
+                if (sin(t) > 0.1f) {
+                    val flameR = 0.65f * obs.scale + playerRadius
+                    if (dx * dx + dz * dz < flameR * flameR &&
+                        py < obs.y + 2.5f * obs.scale && py + 1.35f > obs.y + 0.2f
+                    ) {
+                        applyKnockback(dx, dz, 11.2f, 6.2f)
+                    }
+                }
+                return
             }
+
             ObstacleType.LASER_BEAM -> {
-                val pulse = sin(t) > -0.25f
-                if (!pulse) return
-                oy = obs.y + 0.75f
-                if (abs(pz - obs.z) < 0.55f && abs((py + 0.65f) - oy) < 0.65f && abs(px - obs.x) < obs.range) {
-                    applyKnockback(0f, 1f, 9.5f, 5.0f)
+                // 1) Twin side emitter pillars at obs.x ± obs.range
+                for (side in floatArrayOf(-obs.range, obs.range)) {
+                    val postX = obs.x + side
+                    val dx = px - postX
+                    val dz = pz - obs.z
+                    val postR = 0.36f + playerRadius
+                    if (dx * dx + dz * dz < postR * postR && py < obs.y + 1.95f && py + 1.35f > obs.y) {
+                        applyKnockback(dx, dz, 9.5f, 4.5f)
+                        return
+                    }
+                }
+                // 2) Active horizontal laser beam
+                if (sin(t) > -0.25f) {
+                    val oy = obs.y + 0.85f
+                    if (abs(pz - obs.z) < 0.42f + playerRadius &&
+                        abs(playerCenterY - oy) < 0.72f &&
+                        abs(px - obs.x) <= obs.range + playerRadius
+                    ) {
+                        val pushZ = if (pz >= obs.z) 1f else -1f
+                        applyKnockback(0f, pushZ, 10.2f, 5.2f)
+                    }
+                }
+                return
+            }
+
+            ObstacleType.FALLING_STALACTITE -> {
+                val cycle = (t % 2.6f + 2.6f) % 2.6f
+                val dropFrac = (cycle / 1.85f).coerceIn(0f, 1f)
+                val oy = obs.y + 5.2f * (1f - dropFrac * dropFrac)
+                val spikeTop = oy + 0.25f * obs.scale
+                val spikeBottom = oy - 2.2f * obs.scale
+                val dx = px - obs.x
+                val dz = pz - obs.z
+                val hitR = 0.62f * obs.scale + playerRadius
+                if (dx * dx + dz * dz < hitR * hitR &&
+                    py + 1.35f >= spikeBottom && py <= spikeTop
+                ) {
+                    applyKnockback(dx, dz, 11.0f, 5.5f)
                 }
                 return
             }
         }
-
-        val dx = px - ox
-        val dy = (py + 0.65f) - oy
-        val dz = pz - oz
-        if (dx * dx + dy * dy + dz * dz < radius * radius) {
-            applyKnockback(dx, dz, 11.0f, 5.8f)
-        }
     }
 
     private fun applyKnockback(dx: Float, dz: Float, force: Float, lift: Float) {
+        // If Golden Aegis Shield is active, absorb the collision completely without knockback!
+        if (shieldTimer > 0f) {
+            shieldTimer = 0f
+            hitStunTimer = 0.35f
+            checkpointBannerTimer = 1.6f
+            checkpointBannerText = "AEGIS SHIELD ABSORBED HIT! 🛡️"
+            listener?.onSfx("checkpoint")
+            listener?.onHaptic(true)
+            spawnBurst(px, py + 0.8f, pz, 18, Rgba.fromHex(0x00E5FF), 4.5f)
+            spawnBurst(px, py + 0.8f, pz, 14, Rgba.fromHex(0xFFD22B), 4.0f)
+            return
+        }
         val len = sqrt(dx * dx + dz * dz).coerceAtLeast(0.01f)
         vx = (dx / len) * force
         vz = (dz / len) * force + 2.5f
@@ -1503,23 +2133,32 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
         grounded = false
         hitStunTimer = 0.42f
         squashY = 0.72f
+        if (cameraShakeEnabled) {
+            cameraShakeTimer = 0.24f
+            cameraShakeIntensity = 0.22f
+        }
         listener?.onSfx("hit")
         listener?.onHaptic(true)
-        spawnBurst(px, py + 0.8f, pz, 12, Rgba.fromHex(0xFF3B5C), 4.0f)
+        // Bright collision sparks (شرارات عند الاصطدام)
+        spawnBurst(px, py + 0.8f, pz, 10, Rgba.fromHex(0xFFD22B), 4.6f)
+        spawnBurst(px, py + 0.8f, pz, 8, Rgba.fromHex(0xFF3B5C), 3.8f)
     }
 
     private fun updateFollowCamera(dt: Float) {
-        val dist = 8.4f
+        val dist = 8.6f
         val yawRad = Math.toRadians(cameraYawOffset.toDouble())
         val pitchRad = Math.toRadians(cameraPitchDeg.toDouble())
         val horizDist = dist * cos(pitchRad).toFloat()
-        val vertDist = dist * sin(pitchRad).toFloat() + 1.2f
+        val vertDist = dist * sin(pitchRad).toFloat() + 1.25f
 
-        val targetCamX = px + sin(yawRad).toFloat() * horizDist
+        val shakeX = if (cameraShakeEnabled && cameraShakeTimer > 0f) sin(worldTime * 55f) * cameraShakeIntensity * (cameraShakeTimer / 0.24f) else 0f
+        val shakeY = if (cameraShakeEnabled && cameraShakeTimer > 0f) cos(worldTime * 48f) * cameraShakeIntensity * (cameraShakeTimer / 0.24f) else 0f
+
+        val targetCamX = px + sin(yawRad).toFloat() * horizDist + shakeX
         val targetCamZ = pz + cos(yawRad).toFloat() * horizDist
-        var targetCamY = maxOf(py + vertDist, prevFloorMinY + 4.5f)
+        var targetCamY = maxOf(py + vertDist + shakeY, prevFloorMinY + 4.5f)
 
-        // Camera collision avoidance: never place camera inside any platform block
+        // Camera collision avoidance: never place camera inside any platform block or large archway structure
         for (i in 0 until platforms.size) {
             val rp = platforms[i]
             if (!rp.active) continue
@@ -1530,25 +2169,50 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                 if (targetCamY < minCamY) targetCamY = minCamY
             }
         }
+        // Prevent camera clipping through checkpoint arches or pendulum crossbeams
+        for (i in 0 until activeCheckpoints.size) {
+            val cp = activeCheckpoints[i]
+            if (abs(targetCamZ - cp.z) < 1.1f && abs(targetCamX - cp.x) < 3.0f) {
+                if (targetCamY in (cp.y + 2.3f)..(cp.y + 4.4f)) {
+                    targetCamY = cp.y + 4.45f
+                }
+            }
+        }
+        for (i in 0 until activeObstacles.size) {
+            val obs = activeObstacles[i]
+            if (obs.type == ObstacleType.SWINGING_PENDULUM || obs.type == ObstacleType.GIANT_SWINGER) {
+                if (abs(targetCamZ - obs.z) < 1.2f && abs(targetCamX - obs.x) < 3.8f) {
+                    if (targetCamY in (obs.y + 3.4f)..(obs.y + 5.3f)) {
+                        targetCamY = obs.y + 5.35f
+                    }
+                }
+            }
+        }
 
         val smooth = minOf(1f, dt * 8.5f)
         camX += (targetCamX - camX) * smooth
         camY += (targetCamY - camY) * (smooth * 0.75f)
         camZ += (targetCamZ - camZ) * smooth
 
+        // Show generous look-ahead space in front of the player
         camLookX += (px - camLookX) * minOf(1f, dt * 12f)
-        camLookY += (py + 1.05f - camLookY) * minOf(1f, dt * 10f)
-        camLookZ += (pz - 1.6f - camLookZ) * minOf(1f, dt * 12f)
+        camLookY += (py + 1.08f - camLookY) * minOf(1f, dt * 10f)
+        camLookZ += (pz - 2.15f - camLookZ) * minOf(1f, dt * 12f)
     }
 
     private fun spawnBurst(x: Float, y: Float, z: Float, count: Int, col: Rgba, speed: Float) {
         val cap = when (graphicsQuality) {
-            GraphicsQuality.LOW -> count / 2
-            GraphicsQuality.MEDIUM -> (count * 3) / 4
+            GraphicsQuality.LOW -> count / 3
+            GraphicsQuality.MEDIUM -> (count * 2) / 3
             GraphicsQuality.HIGH -> count
         }.coerceAtLeast(2)
+        val maxParticles = when (graphicsQuality) {
+            GraphicsQuality.LOW -> 35
+            GraphicsQuality.MEDIUM -> 80
+            GraphicsQuality.HIGH -> 150
+        }
         for (i in 0 until cap) {
-            if (particles.size >= 150) break
+            if (particles.size >= maxParticles) break
             val a = Random.nextFloat() * 6.283f
             val sp = (0.35f + Random.nextFloat() * 0.65f) * speed
             particles += Particle(
@@ -1617,7 +2281,11 @@ class GamePhysicsWorld(var listener: GameWorldListener? = null) {
                 WorldProgressionGraph.goalTimeMsForLevel(currentLevel.number)
             } else {
                 0L
-            }
+            },
+            hazardWarningActive = hazardWarningActive,
+            shieldRemainingSec = shieldTimer,
+            magnetRemainingSec = magnetTimer,
+            wingsRemainingSec = wingsTimer
         )
     }
 

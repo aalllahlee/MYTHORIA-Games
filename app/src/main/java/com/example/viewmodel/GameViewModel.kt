@@ -50,7 +50,10 @@ data class VictorySummary(
     val goalMet: Boolean = true,
     val newlyUnlockedWorldId: Int? = null,
     val newlyUnlockedWorldName: String? = null,
-    val canAdvanceNextLevel: Boolean = true
+    val canAdvanceNextLevel: Boolean = true,
+    val perfectLandings: Int = 0,
+    val secretPathFound: Boolean = false,
+    val respawnCount: Int = 0
 )
 
 class GameViewModel(application: Application) : AndroidViewModel(application), GameWorldListener {
@@ -94,7 +97,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val ownedItems: StateFlow<Set<String>> = repo.ownedItemIdsFlow
-        .stateIn(viewModelScope, SharingStarted.Eagerly, setOf("red_hero", "hat_none", "shoe_default", "trail_dust", "victory_dance"))
+        .stateIn(viewModelScope, SharingStarted.Eagerly, setOf("red_hero", "salma_heroine", "kid_ahmed", "hat_none", "shoe_default", "trail_dust", "victory_dance"))
 
     val achievements: StateFlow<List<AchievementEntity>> = repo.achievementsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -117,8 +120,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
             profile.collect { p ->
                 soundEngine.musicVolume = p.musicVolume
                 soundEngine.sfxVolume = p.sfxVolume
+                soundEngine.uiVolume = p.uiVolume
+                soundEngine.isMuted = p.audioMuted
                 physicsWorld.cameraSensitivity = p.cameraSensitivity
                 physicsWorld.joystickSensitivity = p.joystickSensitivity
+                physicsWorld.cameraShakeEnabled = p.cameraShakeEnabled
                 physicsWorld.dashUnlocked = p.dashUnlocked
                 physicsWorld.selectedSkin = GameCatalog.skins.find { it.id == p.selectedSkinId } ?: GameCatalog.skins[0]
                 physicsWorld.selectedHatId = p.selectedHatId
@@ -184,6 +190,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
 
     fun updateHudSnapshot(snapshot: HudSnapshot) {
         _hud.value = snapshot
+        // Dynamic music tension scales gently with speed & hazard proximity
+        val speedTension = ((snapshot.speedMultiplier - 1f) / 0.8f).coerceIn(0f, 0.7f)
+        val hazardTension = if (snapshot.hazardWarningActive) 0.35f else 0f
+        soundEngine.tensionLevel = (speedTension + hazardTension).coerceIn(0f, 1f)
     }
 
     fun openModeDialog(show: Boolean) {
@@ -262,18 +272,34 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
         }
     }
 
+    fun claimDailyLoginReward() {
+        viewModelScope.launch {
+            val epochDay = System.currentTimeMillis() / 86_400_000L
+            val rewardedCoins = repo.claimDailyLoginReward(epochDay)
+            soundEngine.playSfx(if (rewardedCoins > 0) "victory" else "click")
+            onHaptic(rewardedCoins > 0)
+        }
+    }
+
+    fun startSeasonalEventRun() {
+        startLevel(100, GameMode.DAILY_CHALLENGE)
+    }
+
     fun togglePause(paused: Boolean) {
         soundEngine.playSfx("click")
+        soundEngine.musicDuckFactor = if (paused) 0.45f else 1.0f
         physicsWorld.isPaused = paused
         _isPausedMenuOpen.value = paused
     }
 
     fun restartCurrentLevel() {
+        soundEngine.musicDuckFactor = 1.0f
         startLevel(activeLevelRef.number.coerceAtLeast(1), physicsWorld.currentMode)
     }
 
     fun respawnAtCheckpoint() {
         soundEngine.playSfx("click")
+        soundEngine.musicDuckFactor = 1.0f
         _showFailOverlay.value = false
         _isPausedMenuOpen.value = false
         physicsWorld.respawnAtCheckpoint()
@@ -341,7 +367,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
         obstaclesPassed: Int,
         raceRank: Int,
         totalRacers: Int,
-        jumpsInRun: Int
+        jumpsInRun: Int,
+        perfectLandings: Int,
+        secretPathFound: Boolean,
+        narrowBridgesCrossed: Int,
+        dashUsed: Boolean,
+        respawnCount: Int,
+        chestsOpened: Int
     ) {
         soundEngine.setMusicTheme(SoundEngine.MusicTheme.VICTORY)
         viewModelScope.launch {
@@ -363,12 +395,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
             when (mode) {
                 GameMode.CAREER, GameMode.TIME_ATTACK -> {
                     val outcome = repo.recordCareerLevelWin(
-                        levelNumber,
-                        timeMs,
-                        activeLevelRef.parTimeSec,
-                        deltaCoins,
-                        activeLevelRef.rewardCoins,
-                        deltaJumps
+                        levelNumber = levelNumber,
+                        timeMs = timeMs,
+                        parTimeSec = activeLevelRef.parTimeSec,
+                        coinsCollected = deltaCoins,
+                        rewardCoins = activeLevelRef.rewardCoins,
+                        jumpsInRun = deltaJumps,
+                        perfectLandings = perfectLandings,
+                        secretPathFound = secretPathFound,
+                        narrowBridgesCrossed = narrowBridgesCrossed,
+                        dashUsed = dashUsed,
+                        respawnCount = respawnCount,
+                        chestsOpened = chestsOpened
                     )
                     stars = outcome.stars
                     totalCoins = outcome.coinsEarned
@@ -399,7 +437,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
                 }
                 GameMode.DAILY_CHALLENGE -> {
                     val day = System.currentTimeMillis() / 86_400_000L
-                    repo.recordDailyChallengeWin(day, deltaCoins, deltaJumps)
+                    repo.recordDailyChallengeWin(day, deltaCoins, deltaJumps, chestsOpened)
                     stars = 3
                     totalCoins = coinsCollected + 180
                     xpEarned = 450
@@ -439,12 +477,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application), G
                 goalMet = goalMet,
                 newlyUnlockedWorldId = newlyUnlockedWorldId,
                 newlyUnlockedWorldName = unlockedWorldName,
-                canAdvanceNextLevel = canAdvance
+                canAdvanceNextLevel = canAdvance,
+                perfectLandings = perfectLandings,
+                secretPathFound = secretPathFound,
+                respawnCount = respawnCount
             )
         }
     }
 
     override fun onPlayerFell() {
+        soundEngine.musicDuckFactor = 0.50f
         val snap = _hud.value
         val deltaJumps = (snap.jumpsInRun - reportedJumpsForRun).coerceAtLeast(0)
         val deltaCoins = (snap.coinsCollected - reportedCoinsForRun).coerceAtLeast(0)

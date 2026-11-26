@@ -125,8 +125,8 @@ fun GameLoadingScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FeaturePill(Icons.Filled.Public, "10 Mythic", "Sky Worlds", ChampionGold)
-            FeaturePill(Icons.Filled.EmojiEvents, "50 Stages", "Progression Graph", SapphireGlow)
-            FeaturePill(Icons.Filled.Shield, "15 Heroes", "Olympian Skins", CandyMagenta)
+            FeaturePill(Icons.Filled.EmojiEvents, "50 Stages", "Progressive Tracks", SapphireGlow)
+            FeaturePill(Icons.Filled.Shield, "3 Heroes", "Ahmed • Salma • Ahmed", CandyMagenta)
             FeaturePill(Icons.Filled.WifiOff, "Play Offline", "Zero Internet Needed", IslandMint)
         }
 

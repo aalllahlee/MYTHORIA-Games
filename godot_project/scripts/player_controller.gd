@@ -2,8 +2,8 @@ extends CharacterBody3D
 
 ## MYTHORIA games — By ahmed
 ## DON'T FALL 3D Character Controller with Full 3D Stylized Cartoon Character Mesh,
-## Double Jump, Coyote Time, Jump Buffer, Dynamic Ground Contact Shadow,
-## Procedural Limb Animation, and Independent Checkpoint & Portal Respawn State.
+## Smooth Proportional Analog Speed Curve, Double Jump, Coyote Time, Jump Buffer,
+## Dynamic Ground Contact Shadow, Procedural Limb Animation, and Independent Respawn State.
 
 const CVB := preload("res://scripts/character_visual_builder.gd")
 
@@ -15,10 +15,10 @@ signal player_jumped(player_id: String, jump_pos: Vector3, is_double_jump: bool)
 @export var player_id: String = "player_0"
 @export var is_ai_racer: bool = false
 @export var character_skin_id: int = 0
-@export var move_speed: float = 8.8
-@export var jump_velocity: float = 11.8
-@export var dive_speed: float = 13.0
-@export var dash_speed: float = 17.5
+@export var move_speed: float = 6.8
+@export var jump_velocity: float = 11.4
+@export var dive_speed: float = 10.6
+@export var dash_speed: float = 13.8
 @export var gravity_base: float = 28.0
 @export var lane_bias_x: float = 0.0
 
@@ -86,7 +86,7 @@ func _create_portal_ring_visual() -> void:
 	mat.albedo_color = Color(0.0, 0.90, 1.0, 0.85)
 	mat.emission_enabled = true
 	mat.emission = Color(1.0, 0.82, 0.17)
-	mat.emission_energy_multiplier = 2.0
+	mat.emission_energy_multiplier = 0.55
 	cyl.material = mat
 	portal_ring_mesh.mesh = cyl
 	portal_ring_mesh.position = Vector3(0.0, 0.1, 0.0)
@@ -120,6 +120,7 @@ func try_activate_checkpoint(cp_index: int, cp_safe_pos: Vector3, cp_safe_yaw_de
 	safe_respawn_yaw_deg = cp_safe_yaw_deg
 	if player_id == "player_0":
 		AudioSynth.play_sfx("checkpoint")
+		GameState.mission_checkpoints_hit += 1
 	checkpoint_reached.emit(player_id, cp_index)
 	return true
 
@@ -151,6 +152,9 @@ func request_dash() -> void:
 		AudioSynth.play_sfx("dash")
 
 func respawn_at_checkpoint() -> void:
+	if player_id == "player_0":
+		AudioSynth.play_sfx("fall")
+		AudioSynth.play_sfx("death")
 	global_position = safe_respawn_pos
 	velocity = Vector3.ZERO
 	dive_timer = 0.0
@@ -168,8 +172,6 @@ func respawn_at_checkpoint() -> void:
 	if is_instance_valid(portal_ring_mesh):
 		portal_ring_mesh.visible = true
 		portal_ring_mesh.scale = Vector3.ONE
-	if player_id == "player_0":
-		AudioSynth.play_sfx("checkpoint")
 	individual_respawn_started.emit(player_id, last_activated_checkpoint, safe_respawn_pos)
 
 func _physics_process(delta: float) -> void:
@@ -220,6 +222,7 @@ func _physics_process(delta: float) -> void:
 				visual_root.scale = Vector3(0.84, 1.26, 0.84)
 			if player_id == "player_0":
 				AudioSynth.play_sfx("jump")
+				GameState.mission_jumps_done += 1
 			player_jumped.emit(player_id, global_position, false)
 		elif not is_ai_racer and jumps_remaining > 0:
 			# Crisp mid-air double jump for forgiving, fun mobile platforming!
@@ -229,27 +232,33 @@ func _physics_process(delta: float) -> void:
 			if is_instance_valid(visual_root):
 				visual_root.scale = Vector3(0.80, 1.30, 0.80)
 			if player_id == "player_0":
-				AudioSynth.play_sfx("jump")
+				AudioSynth.play_sfx("double_jump")
+				GameState.mission_jumps_done += 1
 			player_jumped.emit(player_id, global_position, true)
 
 	if not is_ai_racer:
 		var kb := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 		var raw_in: Vector2 = joy_input if joy_input.length() > 0.08 else kb
+		var input_mag: float = clampf(raw_in.length(), 0.0, 1.0)
+		# Smooth response curve so gentle analog movement gives fine walking control
+		# and full tilt gives comfortable, controllable platforming speed:
+		var curved_mag: float = pow(input_mag, 1.38)
 		var cam_rad: float = deg_to_rad(camera_yaw_deg)
 		var fwd := Vector3(-sin(cam_rad), 0.0, -cos(cam_rad))
 		var right := Vector3(cos(cam_rad), 0.0, -sin(cam_rad))
 		var wish_dir: Vector3 = (right * raw_in.x + fwd * (-raw_in.y)).normalized()
 
 		if dive_timer <= 0.0 and hit_stun_timer <= 0.0:
-			if raw_in.length() > 0.08:
-				var accel: float = 40.0 if is_on_floor() else 28.0
-				velocity.x = move_toward(velocity.x, wish_dir.x * move_speed, accel * delta)
-				velocity.z = move_toward(velocity.z, wish_dir.z * move_speed, accel * delta)
+			if input_mag > 0.08:
+				var target_spd: float = move_speed * curved_mag
+				var accel: float = 28.0 if is_on_floor() else 20.0
+				velocity.x = move_toward(velocity.x, wish_dir.x * target_spd, accel * delta)
+				velocity.z = move_toward(velocity.z, wish_dir.z * target_spd, accel * delta)
 				if is_instance_valid(visual_root):
 					var target_yaw: float = atan2(wish_dir.x, wish_dir.z)
-					visual_root.rotation.y = lerp_angle(visual_root.rotation.y, target_yaw, 13.0 * delta)
+					visual_root.rotation.y = lerp_angle(visual_root.rotation.y, target_yaw, 12.0 * delta)
 			else:
-				var decel: float = 26.0 if is_on_floor() else 10.0
+				var decel: float = 28.0 if is_on_floor() else 14.0
 				velocity.x = move_toward(velocity.x, 0.0, decel * delta)
 				velocity.z = move_toward(velocity.z, 0.0, decel * delta)
 	else:

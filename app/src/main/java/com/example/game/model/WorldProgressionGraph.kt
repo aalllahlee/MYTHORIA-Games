@@ -98,8 +98,8 @@ object WorldProgressionGraph {
     private fun computeGoalTimeSec(levelNumber: Int): Float {
         val lvl = LevelCatalog.getLevel(levelNumber)
         val stageInWorld = ((levelNumber - 1) % 5) + 1
-        // World Gateway (Stage 5) uses strict par time; stages 1..4 allow a modest 15% margin
-        val raw = if (stageInWorld == 5) lvl.parTimeSec else lvl.parTimeSec * 1.15f
+        // World Gateway (Stage 5) uses strict par time; stages 1..4 allow a tight 8% margin
+        val raw = if (stageInWorld == 5) lvl.parTimeSec else lvl.parTimeSec * 1.08f
         return ceil(raw.toDouble()).toFloat()
     }
 

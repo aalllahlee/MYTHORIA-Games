@@ -97,20 +97,51 @@ fun ShopScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     items(GameCatalog.skins) { skin ->
-                        val owned = ownedIds.contains(skin.id)
                         val equipped = profile.selectedSkinId == skin.id
                         val col = Color(skin.hoodieColor.r, skin.hoodieColor.g, skin.hoodieColor.b)
-                        ShopCard(
-                            title = skin.name,
-                            description = skin.description,
-                            accent = col,
-                            owned = owned,
-                            equipped = equipped,
-                            cost = skin.costCoins,
-                            canAfford = profile.coins >= skin.costCoins,
-                            strings = strings,
-                            onAction = { onBuyOrSelectSkin(skin.id) }
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = SurfaceCardGlass,
+                            modifier = Modifier
+                                .height(165.dp)
+                                .border(1.8.dp, if (equipped) ChampionGold else col, RoundedCornerShape(20.dp))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = skin.name,
+                                    fontFamily = FredokaFontFamily,
+                                    fontSize = 16.sp,
+                                    color = ChampionGold,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                                com.example.ui.components.FullBodyCharacterArtwork(
+                                    skin = skin,
+                                    hatId = profile.selectedHatId,
+                                    shoeId = profile.selectedShoeId,
+                                    trailId = profile.selectedTrailId,
+                                    modifier = Modifier.weight(1f).fillMaxWidth()
+                                )
+                                Button(
+                                    onClick = { onBuyOrSelectSkin(skin.id) },
+                                    modifier = Modifier.fillMaxWidth().height(38.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (equipped) ChampionGold else IslandMintDark,
+                                        contentColor = if (equipped) RoyalNavyDeep else Color.White
+                                    )
+                                ) {
+                                    Text(
+                                        text = if (equipped) strings.equipped else strings.equip,
+                                        fontFamily = FredokaFontFamily,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -135,12 +166,10 @@ fun ShopScreen(
                         }
                         val col = Color(item.previewColor.r, item.previewColor.g, item.previewColor.b)
                         ShopCard(
-                            title = item.name,
-                            description = item.description,
+                            item = item,
                             accent = col,
                             owned = owned,
                             equipped = equipped,
-                            cost = item.costCoins,
                             canAfford = profile.coins >= item.costCoins,
                             strings = strings,
                             onAction = { onBuyOrEquipItem(item.id, item.category) }
@@ -154,41 +183,52 @@ fun ShopScreen(
 
 @Composable
 private fun ShopCard(
-    title: String,
-    description: String,
+    item: com.example.game.model.ShopItemDef,
     accent: Color,
     owned: Boolean,
     equipped: Boolean,
-    cost: Int,
     canAfford: Boolean,
     strings: LocalizedStrings,
     onAction: () -> Unit
 ) {
+    val rarityCol = Color(item.rarity.colorHex)
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = SurfaceCardGlass,
         modifier = Modifier
-            .height(140.dp)
-            .border(1.5.dp, if (equipped) ChampionGold else accent, RoundedCornerShape(20.dp))
+            .height(152.dp)
+            .border(1.8.dp, if (equipped) ChampionGold else accent, RoundedCornerShape(20.dp))
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(38.dp).clip(CircleShape).background(accent.copy(alpha = 0.25f)).border(1.5.dp, accent, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.ShoppingBag, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
-                }
+                com.example.ui.components.ShopItem3DArtwork(
+                    item = item,
+                    modifier = Modifier.size(58.dp)
+                )
                 Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(title, fontFamily = FredokaFontFamily, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text(description, fontSize = 10.sp, color = TextMuted, maxLines = 2, lineHeight = 13.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(5.dp),
+                        color = rarityCol.copy(alpha = 0.22f),
+                        modifier = Modifier.border(1.dp, rarityCol, RoundedCornerShape(5.dp))
+                    ) {
+                        Text(
+                            text = item.rarity.labelEn,
+                            fontFamily = FredokaFontFamily,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = rarityCol,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                    Text(item.name, fontFamily = FredokaFontFamily, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(item.description, fontSize = 10.sp, color = TextMuted, maxLines = 2, lineHeight = 12.sp)
                 }
             }
             Button(
                 onClick = onAction,
                 enabled = owned || canAfford,
-                modifier = Modifier.fillMaxWidth().height(40.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = when {
                         equipped -> ChampionGold
@@ -202,7 +242,7 @@ private fun ShopCard(
                     text = when {
                         equipped -> strings.equipped
                         owned -> strings.equip
-                        else -> "${strings.buy} • $cost"
+                        else -> "${strings.buy} • ${item.costCoins}"
                     },
                     fontFamily = FredokaFontFamily,
                     fontSize = 13.sp

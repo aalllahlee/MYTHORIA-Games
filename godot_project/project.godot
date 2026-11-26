@@ -15,9 +15,9 @@ config/description="A colorful 3D mythological obstacle survival adventure by MY
 run/main_scene="res://scenes/studio_splash.tscn"
 config/features=PackedStringArray("4.2", "Mobile")
 boot_splash/bg_color=Color(0.0313726, 0.054902, 0.141176, 1)
-boot_splash/image="res://icon.svg"
+boot_splash/image="res://icon.png"
 boot_splash/fullsize=false
-config/icon="res://icon.svg"
+config/icon="res://icon.png"
 
 [autoload]
 

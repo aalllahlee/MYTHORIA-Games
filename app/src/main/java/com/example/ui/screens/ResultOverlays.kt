@@ -140,6 +140,31 @@ fun VictoryOverlay(
                     }
                 }
 
+                // 3-Star Replayability Breakdown
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Text(
+                        text = "★1: Stage Clear ✓",
+                        fontSize = 10.sp,
+                        color = IslandMint,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (summary.stars >= 2) "★2: Goal / Secret ✓" else "★2: Beat Goal / Secret",
+                        fontSize = 10.sp,
+                        color = if (summary.stars >= 2) StarYellow else TextMuted,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (summary.stars >= 3) "★3: Pro Challenge ✓" else "★3: 0 Falls & 3+ Perfect",
+                        fontSize = 10.sp,
+                        color = if (summary.stars >= 3) StarYellow else TextMuted,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

@@ -31,9 +31,9 @@ func _build_checkpoint_3d_visuals() -> void:
 	add_child(col)
 
 	var mat_marble := CVB.make_mat(Color(0.95, 0.96, 1.0), 0.35, 0.08)
-	var mat_gold := CVB.make_mat(Color(1.0, 0.82, 0.18), 0.22, 0.85, Color(1.0, 0.75, 0.12), 0.35)
-	var mat_sapphire := CVB.make_mat(Color(0.0, 0.88, 1.0), 0.15, 0.30, Color(0.0, 0.78, 1.0), 1.6)
-	var mat_beam := CVB.make_mat(Color(0.0, 0.88, 1.0, 0.28), 0.20, 0.10, Color(0.0, 0.80, 1.0), 1.1)
+	var mat_gold := CVB.make_mat(Color(1.0, 0.82, 0.18), 0.22, 0.85, Color(1.0, 0.75, 0.12), 0.30)
+	var mat_sapphire := CVB.make_mat(Color(0.0, 0.88, 1.0), 0.15, 0.30, Color(0.0, 0.78, 1.0), 0.55)
+	var mat_beam := CVB.make_mat(Color(0.0, 0.88, 1.0, 0.28), 0.20, 0.10, Color(0.0, 0.80, 1.0), 0.45)
 
 	ring_mesh = MeshInstance3D.new()
 	var r_cyl := CylinderMesh.new()
@@ -115,5 +115,5 @@ func _on_body_entered(body: Node3D) -> void:
 					0.15,
 					0.30,
 					Color(1.0, 0.82, 0.16),
-					2.2
+					0.55
 				)

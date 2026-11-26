@@ -57,6 +57,8 @@ class GameRepository(private val dao: GameDao) {
 
         val starterItems = listOf(
             ShopOwnershipEntity("red_hero", ShopCategory.CHARACTERS.name),
+            ShopOwnershipEntity("salma_heroine", ShopCategory.CHARACTERS.name),
+            ShopOwnershipEntity("kid_ahmed", ShopCategory.CHARACTERS.name),
             ShopOwnershipEntity("hat_none", ShopCategory.HATS.name),
             ShopOwnershipEntity("shoe_default", ShopCategory.SHOES.name),
             ShopOwnershipEntity("trail_dust", ShopCategory.TRAILS.name),
@@ -71,8 +73,44 @@ class GameRepository(private val dao: GameDao) {
 
         val initialMissions = GameCatalog.missions.map {
             MissionEntity(missionId = it.id, progress = 0, completedCount = 0)
-        }
+        } + MissionEntity(missionId = LOGIN_STREAK_TRACKER_ID, progress = 0, completedCount = 0)
         dao.insertMissionsIgnore(initialMissions)
+    }
+
+    companion object {
+        const val LOGIN_STREAK_TRACKER_ID = "login_streak_tracker"
+    }
+
+    suspend fun claimDailyLoginReward(epochDay: Long): Int {
+        val safeDay = epochDay.coerceAtLeast(1L)
+        val tracker = dao.getMissionOnce(LOGIN_STREAK_TRACKER_ID)
+            ?: MissionEntity(LOGIN_STREAK_TRACKER_ID, progress = 0, completedCount = 0)
+        if (tracker.completedCount.toLong() == safeDay) {
+            return 0 // Already claimed today
+        }
+        // Forgiving 7-day cycle: missing a day does not reset the player's streak back to 0
+        val nextStreakDay = (tracker.progress.coerceAtLeast(0) % 7) + 1
+        val rewardDef = GameCatalog.loginStreakRewards.getOrElse(nextStreakDay - 1) {
+            GameCatalog.loginStreakRewards.first()
+        }
+        dao.upsertMission(
+            tracker.copy(
+                progress = nextStreakDay,
+                completedCount = safeDay.toInt()
+            )
+        )
+        val profile = dao.getProfileOnce() ?: PlayerProfileEntity()
+        val newXp = profile.playerXp + 150
+        dao.upsertProfile(
+            profile.copy(
+                coins = profile.coins + rewardDef.rewardCoins,
+                totalCoinsEarned = profile.totalCoinsEarned + rewardDef.rewardCoins,
+                playerXp = newXp
+            )
+        )
+        checkXpMilestones(profile.playerXp, newXp)
+        updateAchievement("ach_coins_500", profile.totalCoinsEarned + rewardDef.rewardCoins)
+        return rewardDef.rewardCoins
     }
 
     suspend fun updateProfile(transform: (PlayerProfileEntity) -> PlayerProfileEntity) {
@@ -148,23 +186,39 @@ class GameRepository(private val dao: GameDao) {
         parTimeSec: Float,
         coinsCollected: Int,
         rewardCoins: Int,
-        jumpsInRun: Int = 0
+        jumpsInRun: Int = 0,
+        perfectLandings: Int = 0,
+        secretPathFound: Boolean = false,
+        narrowBridgesCrossed: Int = 0,
+        dashUsed: Boolean = false,
+        respawnCount: Int = 0,
+        chestsOpened: Int = 0
     ): LevelWinOutcome {
         val goalTimeMs = WorldProgressionGraph.goalTimeMsForLevel(levelNumber)
         val existing = dao.getLevelOnce(levelNumber)
             ?: LevelProgressEntity(levelNumber, unlocked = true, goalTimeMs = goalTimeMs)
         val elapsedSec = timeMs / 1000f
+        val goalMetThisRun = WorldProgressionGraph.isGoalMet(levelNumber, timeMs, completed = true)
+
+        // 3-Star Replayability System per Stage:
+        // ★ Star 1 (نجمة أولى): Complete the stage (إنهاء المرحلة)
+        // ★ Star 2 (نجمة ثانية): Secondary objective — beat goal time, discover secret path/chest, or parTime * 1.25f
+        // ★ Star 3 (نجمة ثالثة): Hard challenge — zero checkpoint respawns + (beat parTime * 0.85f, or 3+ perfect landings, or secret path without dash)
+        val star2Earned = goalMetThisRun || secretPathFound || chestsOpened > 0 || elapsedSec <= parTimeSec * 1.25f
+        val star3Earned = star2Earned && (
+            elapsedSec <= parTimeSec * 0.85f ||
+            (respawnCount == 0 && (perfectLandings >= 3 || secretPathFound || chestsOpened > 0 || (!dashUsed && elapsedSec <= parTimeSec * 1.05f)))
+        )
         val earnedStars = when {
-            elapsedSec <= parTimeSec * 0.85f -> 3
-            elapsedSec <= parTimeSec * 1.25f -> 2
+            star3Earned -> 3
+            star2Earned -> 2
             else -> 1
         }
-        val goalMetThisRun = WorldProgressionGraph.isGoalMet(levelNumber, timeMs, completed = true)
         val goalMetStored = existing.goalMet || goalMetThisRun
 
-        val firstTimeBonus = if (!existing.completed) rewardCoins else rewardCoins / 3
+        val firstTimeBonus = if (!existing.completed) rewardCoins else (rewardCoins / 5).coerceAtLeast(8)
         val totalEarned = coinsCollected + firstTimeBonus
-        val xpEarned = 350 + earnedStars * 75 + coinsCollected * 2
+        val xpEarned = 140 + earnedStars * 45 + coinsCollected
 
         val bestTime = if (existing.bestTimeMs == 0L || timeMs < existing.bestTimeMs) timeMs else existing.bestTimeMs
         dao.upsertLevel(
@@ -197,8 +251,22 @@ class GameRepository(private val dao: GameDao) {
 
         checkXpMilestones(profile.playerXp, newXp)
         incrementMission("mis_stages", 1)
+        incrementMission("mis_weekly_stages_10", 1)
+        incrementMission("mis_event_festival_stages", 1)
         incrementMission("mis_coins", totalEarned)
+        incrementMission("mis_weekly_coins_400", totalEarned)
         if (jumpsInRun > 0) incrementMission("mis_jumps", jumpsInRun)
+        if (timeMs <= 90_000L) incrementMission("mis_speed_90", 1)
+        if (perfectLandings > 0) incrementMission("mis_perfect_landings", perfectLandings)
+        if (respawnCount == 0) incrementMission("mis_no_checkpoint", 1)
+        if (secretPathFound) incrementMission("mis_secret_path", 1)
+        if (chestsOpened > 0) {
+            incrementMission("mis_open_chest", chestsOpened)
+            incrementMission("mis_weekly_chests_3", chestsOpened)
+            incrementMission("mis_event_royal_chest", chestsOpened)
+        }
+        if (narrowBridgesCrossed > 0) incrementMission("mis_narrow_bridges", narrowBridgesCrossed)
+        if (!dashUsed) incrementMission("mis_no_dash", 1)
 
         updateAchievement("ach_first_win", newTotalWins)
         updateAchievement("ach_10_wins", newTotalWins)
@@ -229,16 +297,16 @@ class GameRepository(private val dao: GameDao) {
     ): LevelWinOutcome {
         val goalTimeMs = WorldProgressionGraph.goalTimeMsForLevel(levelNumber)
         val rankBonus = when (placement) {
-            1 -> 260
-            2 -> 150
-            3 -> 90
-            else -> 40
+            1 -> 130
+            2 -> 75
+            3 -> 45
+            else -> 20
         }
         val xpBonus = when (placement) {
-            1 -> 520
-            2 -> 360
-            3 -> 250
-            else -> 160
+            1 -> 260
+            2 -> 180
+            3 -> 125
+            else -> 80
         }
         val totalEarned = coinsCollected + rankBonus
         val stars = when (placement) {
@@ -303,11 +371,11 @@ class GameRepository(private val dao: GameDao) {
         )
     }
 
-    suspend fun recordDailyChallengeWin(epochDay: Long, coinsEarned: Int, jumpsInRun: Int = 0) {
+    suspend fun recordDailyChallengeWin(epochDay: Long, coinsEarned: Int, jumpsInRun: Int = 0, chestsOpened: Int = 0) {
         val profile = dao.getProfileOnce() ?: PlayerProfileEntity()
-        val bonus = if (profile.dailyLastCompletedEpochDay != epochDay) 180 else 60
+        val bonus = if (profile.dailyLastCompletedEpochDay != epochDay) 110 else 35
         val total = coinsEarned + bonus
-        val xpBonus = 450
+        val xpBonus = 240
         val newXp = profile.playerXp + xpBonus
         dao.upsertProfile(
             profile.copy(
@@ -321,7 +389,15 @@ class GameRepository(private val dao: GameDao) {
         )
         checkXpMilestones(profile.playerXp, newXp)
         incrementMission("mis_stages", 1)
+        incrementMission("mis_weekly_stages_10", 1)
+        incrementMission("mis_event_festival_stages", 1)
         incrementMission("mis_coins", total)
+        incrementMission("mis_weekly_coins_400", total)
+        if (chestsOpened > 0) {
+            incrementMission("mis_open_chest", chestsOpened)
+            incrementMission("mis_weekly_chests_3", chestsOpened)
+            incrementMission("mis_event_royal_chest", chestsOpened)
+        }
         if (jumpsInRun > 0) incrementMission("mis_jumps", jumpsInRun)
         updateAchievement("ach_daily", 1)
         updateAchievement("ach_10_wins", profile.totalWins + 1)

@@ -1,385 +1,322 @@
 extends RefCounted
 
 ## MYTHORIA games — By ahmed
-## Procedural 3D Stylized Cartoon Character & Environment Visual Builder + Rich Illustrated Card Textures & UI Theme Helper.
-## 100% self-contained with str() conversions and zero external Autoload calls in static functions.
+## Ultra-Detailed 3D Stylized Cartoon Character & Environment Visual Builder:
+## Strictly 3 Exclusive Heroes:
+##   0: Ahmed (Royal Winged Hero Boy)
+##   1: Salma (Star Princess Heroine Girl)
+##   2: Ahmed (Turbo Kid Adventurer with Cap, Headphones & Rocket Jetpack)
 
 const SKIN_COLORS := [
-	{"primary": Color(0.92, 0.18, 0.22), "secondary": Color(1.0, 0.82, 0.18), "headgear": "crown_hair", "wings": false},
-	{"primary": Color(1.0, 0.75, 0.08), "secondary": Color(0.0, 0.86, 1.0), "headgear": "laurel_crown", "wings": true},
-	{"primary": Color(0.14, 0.52, 0.98), "secondary": Color(1.0, 0.84, 0.22), "headgear": "winged_helm", "wings": true},
-	{"primary": Color(0.0, 0.78, 0.96), "secondary": Color(0.68, 0.94, 1.0), "headgear": "crystal_horns", "wings": false},
-	{"primary": Color(0.88, 0.16, 0.32), "secondary": Color(1.0, 0.84, 0.16), "headgear": "royal_crown", "wings": true},
-	{"primary": Color(0.75, 0.82, 0.92), "secondary": Color(1.0, 0.82, 0.18), "headgear": "spartan_crest", "wings": false},
-	{"primary": Color(0.16, 0.18, 0.28), "secondary": Color(0.95, 0.22, 0.28), "headgear": "ninja_hood", "wings": false},
-	{"primary": Color(0.12, 0.32, 0.78), "secondary": Color(1.0, 0.84, 0.16), "headgear": "royal_crown", "wings": true},
-	{"primary": Color(0.18, 0.42, 0.92), "secondary": Color(0.0, 0.92, 1.0), "headgear": "wizard_halo", "wings": false},
-	{"primary": Color(1.0, 0.58, 0.08), "secondary": Color(1.0, 0.88, 0.28), "headgear": "sun_halo", "wings": true},
-	{"primary": Color(0.38, 0.68, 1.0), "secondary": Color(1.0, 0.86, 0.24), "headgear": "winged_helm", "wings": true},
-	{"primary": Color(0.72, 0.22, 0.88), "secondary": Color(1.0, 0.84, 0.18), "headgear": "valkyrie_helm", "wings": true},
-	{"primary": Color(0.14, 0.76, 0.52), "secondary": Color(1.0, 0.84, 0.18), "headgear": "spartan_crest", "wings": false},
-	{"primary": Color(1.0, 0.80, 0.12), "secondary": Color(0.0, 0.88, 1.0), "headgear": "supreme_crown", "wings": true},
-	{"primary": Color(0.45, 0.18, 0.92), "secondary": Color(0.0, 0.92, 1.0), "headgear": "wizard_halo", "wings": true}
+	{"primary": Color(0.92, 0.18, 0.24), "secondary": Color(1.0, 0.84, 0.18), "headgear": "crown_hair", "wings": true, "style": "ahmed_hero"},
+	{"primary": Color(0.96, 0.28, 0.64), "secondary": Color(1.0, 0.86, 0.24), "headgear": "girl_pigtails", "wings": true, "style": "salma_girl"},
+	{"primary": Color(0.10, 0.78, 0.52), "secondary": Color(0.14, 0.54, 0.98), "headgear": "kid_cap", "wings": false, "style": "ahmed_kid2"}
 ]
 
-static func make_mat(col: Color, roughness: float = 0.32, metallic: float = 0.08, emission_col: Color = Color(0, 0, 0, 0), emission_energy: float = 0.0) -> StandardMaterial3D:
+static var _platform_mat_cache: Dictionary = {}
+
+static func make_mat(col: Color, roughness: float = 0.22, metallic: float = 0.14, emission_col: Color = Color(0, 0, 0, 0), emission_energy: float = 0.0) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = col
 	m.roughness = roughness
 	m.metallic = metallic
 	m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	m.rim_enabled = true
+	m.rim = 0.38
+	m.rim_tint = 0.45
 	if col.a < 0.99:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	if emission_energy > 0.0:
 		m.emission_enabled = true
 		m.emission = emission_col
-		m.emission_energy_multiplier = emission_energy
+		m.emission_energy_multiplier = minf(emission_energy, 0.58)
+	return m
+
+static func _add_part(parent: Node3D, mesh: Mesh, pos: Vector3, rot_deg: Vector3 = Vector3.ZERO, sc: Vector3 = Vector3.ONE) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.position = pos
+	if rot_deg != Vector3.ZERO:
+		mi.rotation_degrees = rot_deg
+	if sc != Vector3.ONE:
+		mi.scale = sc
+	parent.add_child(mi)
+	return mi
+
+static func _make_capsule(r: float, h: float, mat: Material) -> CapsuleMesh:
+	var m := CapsuleMesh.new()
+	m.radius = r
+	m.height = h
+	m.material = mat
+	return m
+
+static func _make_sphere(r: float, h: float, mat: Material) -> SphereMesh:
+	var m := SphereMesh.new()
+	m.radius = r
+	m.height = h
+	m.material = mat
+	return m
+
+static func _make_cyl(top_r: float, bot_r: float, h: float, mat: Material) -> CylinderMesh:
+	var m := CylinderMesh.new()
+	m.top_radius = top_r
+	m.bottom_radius = bot_r
+	m.height = h
+	m.material = mat
+	return m
+
+static func _make_box(sz: Vector3, mat: Material) -> BoxMesh:
+	var m := BoxMesh.new()
+	m.size = sz
+	m.material = mat
 	return m
 
 static func build_character_visual(skin_id: int = 0) -> Node3D:
-	var idx: int = clampi(skin_id, 0, SKIN_COLORS.size() - 1)
+	var idx: int = clampi(skin_id % 3, 0, 2)
 	var skin: Dictionary = SKIN_COLORS[idx]
 	var prim_col: Color = skin["primary"]
 	var sec_col: Color = skin["secondary"]
-	var headgear_type: String = str(skin["headgear"])
-	var has_wings: bool = bool(skin["wings"])
+	var char_style: String = str(skin["style"])
 
 	var root := Node3D.new()
 	root.name = "VisualRoot"
 
-	var mat_primary := make_mat(prim_col, 0.28, 0.12)
-	var mat_primary_light := make_mat(prim_col.lightened(0.22), 0.25, 0.15)
-	var mat_secondary := make_mat(sec_col, 0.25, 0.42)
-	var mat_gold := make_mat(Color(1.0, 0.84, 0.18), 0.18, 0.88, Color(1.0, 0.76, 0.12), 0.42)
-	var mat_sapphire := make_mat(Color(0.0, 0.88, 1.0), 0.12, 0.35, Color(0.0, 0.78, 1.0), 1.6)
-	var mat_ruby := make_mat(Color(1.0, 0.18, 0.32), 0.15, 0.35, Color(1.0, 0.15, 0.28), 1.2)
-	var mat_skin := make_mat(Color(1.0, 0.83, 0.70), 0.42, 0.02)
-	var mat_blush := make_mat(Color(1.0, 0.56, 0.58), 0.45, 0.0)
-	var mat_dark_pants := make_mat(Color(0.14, 0.22, 0.42), 0.42, 0.08)
-	var mat_white := make_mat(Color(0.98, 0.99, 1.0), 0.22, 0.05)
-	var mat_eye_dark := make_mat(Color(0.06, 0.09, 0.18), 0.10, 0.15)
-	var mat_eye_iris := make_mat(Color(0.12, 0.55, 0.98), 0.15, 0.20)
-	var mat_hair := make_mat(Color(0.36, 0.18, 0.07), 0.38, 0.05)
+	var mat_primary := make_mat(prim_col, 0.22, 0.16)
+	var mat_primary_light := make_mat(prim_col.lightened(0.26), 0.20, 0.18)
+	var mat_primary_dark := make_mat(prim_col.darkened(0.25), 0.28, 0.12)
+	var mat_secondary := make_mat(sec_col, 0.20, 0.42)
+	var mat_gold := make_mat(Color(1.0, 0.84, 0.18), 0.16, 0.88, Color(1.0, 0.76, 0.12), 0.35)
+	var mat_sapphire := make_mat(Color(0.0, 0.88, 1.0), 0.12, 0.35, Color(0.0, 0.78, 1.0), 0.55)
+	var mat_ruby := make_mat(Color(1.0, 0.18, 0.36), 0.14, 0.35, Color(1.0, 0.15, 0.30), 0.50)
+	var mat_skin := make_mat(Color(1.0, 0.85, 0.74), 0.34, 0.02)
+	var mat_skin_warm := make_mat(Color(0.98, 0.76, 0.64), 0.36, 0.02)
+	var mat_blush := make_mat(Color(1.0, 0.48, 0.58), 0.38, 0.0)
+	var mat_white := make_mat(Color(0.98, 0.99, 1.0), 0.18, 0.06)
+	var mat_eye_dark := make_mat(Color(0.05, 0.08, 0.16), 0.08, 0.15)
+	var mat_hair_brown := make_mat(Color(0.30, 0.14, 0.06), 0.30, 0.08)
+	var mat_hair_salma := make_mat(Color(0.22, 0.09, 0.14), 0.26, 0.12)
+	var mat_navy := make_mat(Color(0.12, 0.20, 0.42), 0.34, 0.10)
 
-	if idx == 6:
-		mat_skin = make_mat(Color(0.18, 0.20, 0.28), 0.35, 0.18)
-		mat_eye_iris = mat_ruby
-	elif idx == 3:
-		mat_skin = make_mat(Color(0.75, 0.96, 1.0), 0.18, 0.38, Color(0.0, 0.75, 1.0), 0.45)
-	elif idx in [1, 4, 13]:
-		mat_hair = make_mat(Color(0.95, 0.72, 0.12), 0.25, 0.45)
+	var mat_hair: StandardMaterial3D = mat_hair_salma if char_style == "salma_girl" else mat_hair_brown
+	var mat_eye_iris: StandardMaterial3D = make_mat(Color(0.74, 0.22, 0.92), 0.12, 0.25) if char_style == "salma_girl" else (make_mat(Color(0.0, 0.78, 0.96), 0.12, 0.25) if char_style == "ahmed_kid2" else make_mat(Color(0.14, 0.52, 0.98), 0.12, 0.25))
 
-	# 1. ORGANIC ROUNDED TORSO PIVOT (Capsule + Shoulder Pads + Cape + Mythoria Emblem)
+	# =========================================================
+	# 1. SCULPTED TORSO PIVOT (Unique Outfit per Hero!)
+	# =========================================================
 	var torso_pivot := Node3D.new()
 	torso_pivot.name = "TorsoPivot"
 	torso_pivot.position = Vector3(0.0, 0.62, 0.0)
 	root.add_child(torso_pivot)
 
-	# Smooth rounded capsule hoodie body instead of a boxy cube!
-	var torso_mesh_inst := MeshInstance3D.new()
-	var torso_cap := CapsuleMesh.new()
-	torso_cap.radius = 0.265
-	torso_cap.height = 0.66
-	torso_cap.material = mat_primary
-	torso_mesh_inst.mesh = torso_cap
-	torso_pivot.add_child(torso_mesh_inst)
+	# Upper chest & waist base
+	_add_part(torso_pivot, _make_capsule(0.255, 0.64, mat_primary), Vector3.ZERO)
 
-	# Chest armor / hoodie vest overlay
-	var chest_vest := MeshInstance3D.new()
-	var vest_cyl := CylinderMesh.new()
-	vest_cyl.top_radius = 0.275
-	vest_cyl.bottom_radius = 0.255
-	vest_cyl.height = 0.34
-	vest_cyl.material = mat_primary_light
-	chest_vest.mesh = vest_cyl
-	chest_vest.position = Vector3(0.0, 0.04, 0.0)
-	torso_pivot.add_child(chest_vest)
-
-	# Rounded golden collar ring
-	var collar_inst := MeshInstance3D.new()
-	var collar_cyl := CylinderMesh.new()
-	collar_cyl.top_radius = 0.24
-	collar_cyl.bottom_radius = 0.28
-	collar_cyl.height = 0.09
-	collar_cyl.material = mat_gold
-	collar_inst.mesh = collar_cyl
-	collar_inst.position = Vector3(0.0, 0.22, 0.0)
-	torso_pivot.add_child(collar_inst)
-
-	# Left & Right Pauldrons (Heroic Shoulder Pads)
-	for side_dir in [-1, 1]:
-		var sf: float = float(side_dir)
-		var pauldron := MeshInstance3D.new()
-		var p_sph := SphereMesh.new()
-		p_sph.radius = 0.135
-		p_sph.height = 0.22
-		p_sph.material = mat_secondary
-		pauldron.mesh = p_sph
-		pauldron.position = Vector3(sf * 0.28, 0.18, 0.0)
-		pauldron.rotation.z = deg_to_rad(-sf * 18.0)
-		torso_pivot.add_child(pauldron)
-
-	# Golden MYTHORIA Chest Medallion + Glowing Sapphire Core
-	var crest_inst := MeshInstance3D.new()
-	var crest_cyl := CylinderMesh.new()
-	crest_cyl.top_radius = 0.105
-	crest_cyl.bottom_radius = 0.105
-	crest_cyl.height = 0.045
-	crest_cyl.material = mat_gold
-	crest_inst.mesh = crest_cyl
-	crest_inst.position = Vector3(0.0, 0.05, 0.255)
-	crest_inst.rotation.x = deg_to_rad(90.0)
-	torso_pivot.add_child(crest_inst)
-
-	var gem_inst := MeshInstance3D.new()
-	var gem_sphere := SphereMesh.new()
-	gem_sphere.radius = 0.058
-	gem_sphere.height = 0.115
-	gem_sphere.material = mat_sapphire
-	gem_inst.mesh = gem_sphere
-	gem_inst.position = Vector3(0.0, 0.05, 0.278)
-	torso_pivot.add_child(gem_inst)
-
-	# Royal Belt + Golden Buckle
-	var belt_inst := MeshInstance3D.new()
-	var belt_cyl := CylinderMesh.new()
-	belt_cyl.top_radius = 0.268
-	belt_cyl.bottom_radius = 0.272
-	belt_cyl.height = 0.085
-	belt_cyl.material = mat_gold
-	belt_inst.mesh = belt_cyl
-	belt_inst.position = Vector3(0.0, -0.17, 0.0)
-	torso_pivot.add_child(belt_inst)
-
-	# Heroic Back Cape
-	var cape_inst := MeshInstance3D.new()
-	var cape_box := BoxMesh.new()
-	cape_box.size = Vector3(0.44, 0.52, 0.035)
-	cape_box.material = mat_secondary
-	cape_inst.mesh = cape_box
-	cape_inst.position = Vector3(0.0, -0.05, -0.26)
-	cape_inst.rotation.x = deg_to_rad(14.0)
-	torso_pivot.add_child(cape_inst)
-
-	# Multi-Feathered Golden Mythoria Wings on Back
-	if has_wings:
+	if char_style == "salma_girl":
+		# SALMA'S ROYAL PRINCESS DRESS:
+		# Fitted bodice + sweetheart gold trim + puff shoulders + golden heart necklace + 2-tier pleated flared skirt + waist ribbon bow + fairy wings!
+		_add_part(torso_pivot, _make_cyl(0.265, 0.235, 0.32, mat_primary_light), Vector3(0.0, 0.06, 0.0))
+		_add_part(torso_pivot, _make_cyl(0.22, 0.26, 0.07, mat_white), Vector3(0.0, 0.22, 0.0))
+		# Golden heart necklace pendant
+		_add_part(torso_pivot, _make_sphere(0.055, 0.10, mat_gold), Vector3(0.0, 0.12, 0.255))
+		_add_part(torso_pivot, _make_sphere(0.036, 0.07, mat_ruby), Vector3(0.0, 0.12, 0.278))
+		# Cute Puff Shoulders
 		for side_dir in [-1, 1]:
-			var s_f: float = float(side_dir)
-			for feather_i in range(3):
-				var f_f: float = float(feather_i)
-				var wing_feather := MeshInstance3D.new()
-				var wf_cap := CapsuleMesh.new()
-				wf_cap.radius = 0.055 - f_f * 0.008
-				wf_cap.height = 0.42 - f_f * 0.06
-				wf_cap.material = mat_gold if feather_i < 2 else mat_sapphire
-				wing_feather.mesh = wf_cap
-				wing_feather.position = Vector3(s_f * (0.24 + f_f * 0.11), 0.15 - f_f * 0.07, -0.24)
-				wing_feather.rotation = Vector3(deg_to_rad(-10.0), deg_to_rad(s_f * 20.0), deg_to_rad(-s_f * (48.0 + f_f * 16.0)))
-				torso_pivot.add_child(wing_feather)
+			var sf: float = float(side_dir)
+			_add_part(torso_pivot, _make_sphere(0.135, 0.25, mat_primary_light), Vector3(sf * 0.28, 0.18, 0.0))
+			_add_part(torso_pivot, _make_cyl(0.105, 0.105, 0.035, mat_gold), Vector3(sf * 0.29, 0.10, 0.0), Vector3(0, 0, -sf * 16.0))
+		# Golden Waist Sash & Back Butterfly Bow
+		_add_part(torso_pivot, _make_cyl(0.248, 0.255, 0.08, mat_gold), Vector3(0.0, -0.09, 0.0))
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(torso_pivot, _make_capsule(0.06, 0.22, mat_gold), Vector3(sf * 0.11, -0.08, -0.25), Vector3(0, 0, sf * 55.0))
+		# Two-Tiered Flared Pleated Skirt
+		_add_part(torso_pivot, _make_cyl(0.245, 0.36, 0.18, mat_primary), Vector3(0.0, -0.18, 0.0))
+		_add_part(torso_pivot, _make_cyl(0.34, 0.43, 0.15, mat_primary_light), Vector3(0.0, -0.27, 0.0))
+		_add_part(torso_pivot, _make_cyl(0.425, 0.44, 0.035, mat_gold), Vector3(0.0, -0.33, 0.0))
+		# Shimmering Fairy Wings (4 crystalline petals)
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(torso_pivot, _make_capsule(0.075, 0.44, mat_gold), Vector3(sf * 0.26, 0.18, -0.23), Vector3(-12.0, sf * 22.0, -sf * 46.0))
+			_add_part(torso_pivot, _make_capsule(0.062, 0.36, mat_sapphire), Vector3(sf * 0.32, 0.05, -0.24), Vector3(-8.0, sf * 18.0, -sf * 68.0))
+	elif char_style == "ahmed_kid2":
+		# LITTLE AHMED'S TURBO STREET HOODIE + NECK HEADPHONES + ROCKET JETPACK:
+		_add_part(torso_pivot, _make_cyl(0.272, 0.262, 0.36, mat_primary_light), Vector3(0.0, 0.03, 0.0))
+		# White & Blue Racing Stripes + Kangaroo Pocket
+		_add_part(torso_pivot, _make_box(Vector3(0.26, 0.14, 0.06), mat_secondary), Vector3(0.0, -0.11, 0.24))
+		_add_part(torso_pivot, _make_cyl(0.095, 0.095, 0.04, mat_gold), Vector3(0.0, 0.07, 0.255), Vector3(90.0, 0.0, 0.0))
+		_add_part(torso_pivot, _make_sphere(0.052, 0.10, mat_sapphire), Vector3(0.0, 0.07, 0.275))
+		# Golden Headphones resting around his neck!
+		_add_part(torso_pivot, _make_cyl(0.245, 0.255, 0.065, mat_navy), Vector3(0.0, 0.22, 0.0))
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(torso_pivot, _make_cyl(0.075, 0.075, 0.06, mat_gold), Vector3(sf * 0.23, 0.23, 0.10), Vector3(0.0, 0.0, 90.0))
+			_add_part(torso_pivot, _make_sphere(0.05, 0.09, mat_sapphire), Vector3(sf * 0.26, 0.23, 0.10))
+		# 3D Twin-Thruster Rocket Jetpack on Back!
+		_add_part(torso_pivot, _make_box(Vector3(0.34, 0.36, 0.16), mat_secondary), Vector3(0.0, 0.04, -0.27))
+		_add_part(torso_pivot, _make_box(Vector3(0.26, 0.24, 0.05), mat_gold), Vector3(0.0, 0.05, -0.35))
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(torso_pivot, _make_cyl(0.075, 0.085, 0.34, mat_white), Vector3(sf * 0.15, 0.02, -0.31))
+			_add_part(torso_pivot, _make_cyl(0.065, 0.095, 0.10, mat_gold), Vector3(sf * 0.15, -0.17, -0.31))
+			_add_part(torso_pivot, _make_sphere(0.058, 0.12, mat_sapphire), Vector3(sf * 0.15, -0.23, -0.31))
+		root.scale = Vector3(0.92, 0.92, 0.92)
+	else:
+		# HERO AHMED'S ROYAL OLYMPUS ARMOR JACKET + PAULDRONS + CAPE + GOLDEN WINGS:
+		_add_part(torso_pivot, _make_cyl(0.275, 0.255, 0.35, mat_primary_light), Vector3(0.0, 0.04, 0.0))
+		_add_part(torso_pivot, _make_cyl(0.24, 0.28, 0.09, mat_gold), Vector3(0.0, 0.22, 0.0))
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(torso_pivot, _make_sphere(0.14, 0.24, mat_gold), Vector3(sf * 0.29, 0.18, 0.0), Vector3(0.0, 0.0, -sf * 18.0))
+			_add_part(torso_pivot, _make_cyl(0.12, 0.13, 0.04, mat_primary_dark), Vector3(sf * 0.29, 0.11, 0.0), Vector3(0.0, 0.0, -sf * 18.0))
+		# Royal Medallion & Glowing Core
+		_add_part(torso_pivot, _make_cyl(0.11, 0.11, 0.045, mat_gold), Vector3(0.0, 0.05, 0.255), Vector3(90.0, 0.0, 0.0))
+		_add_part(torso_pivot, _make_sphere(0.06, 0.115, mat_sapphire), Vector3(0.0, 0.05, 0.28))
+		# Golden Champion Belt & Buckle
+		_add_part(torso_pivot, _make_cyl(0.268, 0.272, 0.085, mat_gold), Vector3(0.0, -0.17, 0.0))
+		_add_part(torso_pivot, _make_box(Vector3(0.12, 0.11, 0.05), mat_sapphire), Vector3(0.0, -0.17, 0.26))
+		# Flowing Royal Cape
+		_add_part(torso_pivot, _make_box(Vector3(0.46, 0.54, 0.035), mat_primary_dark), Vector3(0.0, -0.05, -0.26), Vector3(14.0, 0.0, 0.0))
+		_add_part(torso_pivot, _make_box(Vector3(0.48, 0.06, 0.04), mat_gold), Vector3(0.0, -0.31, -0.32), Vector3(14.0, 0.0, 0.0))
+		# 6-Feathered Golden Angel Wings
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			for f_i in range(3):
+				var ff: float = float(f_i)
+				var w_mat: StandardMaterial3D = mat_gold if f_i < 2 else mat_sapphire
+				_add_part(
+					torso_pivot,
+					_make_capsule(0.056 - ff * 0.008, 0.44 - ff * 0.06, w_mat),
+					Vector3(sf * (0.24 + ff * 0.11), 0.16 - ff * 0.07, -0.24),
+					Vector3(-10.0, sf * 20.0, -sf * (46.0 + ff * 16.0))
+				)
 
-	# 2. EXPRESSIVE CARTOON HEAD PIVOT
+	# =========================================================
+	# 2. SCULPTED ANIME/CHIBI HEAD PIVOT
+	# =========================================================
 	var head_pivot := Node3D.new()
 	head_pivot.name = "HeadPivot"
 	head_pivot.position = Vector3(0.0, 1.15, 0.0)
 	root.add_child(head_pivot)
 
-	var head_inst := MeshInstance3D.new()
-	var head_sphere := SphereMesh.new()
-	head_sphere.radius = 0.31
-	head_sphere.height = 0.58
-	head_sphere.material = mat_skin
-	head_inst.mesh = head_sphere
-	head_pivot.add_child(head_inst)
+	# Soft Chibi Head & Neck
+	_add_part(head_pivot, _make_cyl(0.11, 0.12, 0.14, mat_skin_warm), Vector3(0.0, -0.27, 0.0))
+	_add_part(head_pivot, _make_sphere(0.31, 0.58, mat_skin), Vector3.ZERO)
 
-	# Cute Cartoon Ears & Rosy Cheeks
+	# Ears & Rosy Anime Cheeks
 	for side_dir in [-1, 1]:
-		var s_f: float = float(side_dir)
-		var ear := MeshInstance3D.new()
-		var ear_sph := SphereMesh.new()
-		ear_sph.radius = 0.065
-		ear_sph.height = 0.13
-		ear_sph.material = mat_skin
-		ear.mesh = ear_sph
-		ear.position = Vector3(s_f * 0.295, 0.0, 0.02)
-		head_pivot.add_child(ear)
+		var sf: float = float(side_dir)
+		_add_part(head_pivot, _make_sphere(0.065, 0.13, mat_skin), Vector3(sf * 0.295, -0.01, 0.02))
+		_add_part(head_pivot, _make_sphere(0.055 if char_style == "salma_girl" else 0.048, 0.07, mat_blush), Vector3(sf * 0.18, -0.05, 0.258))
+		if char_style == "salma_girl":
+			# Salma's Golden Pearl Earrings!
+			_add_part(head_pivot, _make_sphere(0.030, 0.06, mat_gold), Vector3(sf * 0.31, -0.075, 0.03))
 
-		var cheek := MeshInstance3D.new()
-		var ch_sph := SphereMesh.new()
-		ch_sph.radius = 0.048
-		ch_sph.height = 0.065
-		ch_sph.material = mat_blush
-		cheek.mesh = ch_sph
-		cheek.position = Vector3(s_f * 0.175, -0.045, 0.255)
-		head_pivot.add_child(cheek)
+	# Cute Sculpted Nose & Happy 3D Smile
+	_add_part(head_pivot, _make_sphere(0.034, 0.062, mat_skin_warm), Vector3(0.0, -0.01, 0.308))
+	_add_part(head_pivot, _make_capsule(0.020, 0.115, mat_white), Vector3(0.0, -0.095, 0.288), Vector3(0.0, 0.0, 90.0))
+	_add_part(head_pivot, _make_capsule(0.014, 0.08, mat_ruby), Vector3(0.0, -0.105, 0.284), Vector3(0.0, 0.0, 90.0))
 
-	# Cute Button Nose & Cheerful Smile
-	var nose := MeshInstance3D.new()
-	var nose_sph := SphereMesh.new()
-	nose_sph.radius = 0.036
-	nose_sph.height = 0.065
-	nose_sph.material = mat_skin
-	nose.mesh = nose_sph
-	nose.position = Vector3(0.0, -0.01, 0.305)
-	head_pivot.add_child(nose)
-
-	var smile := MeshInstance3D.new()
-	var sm_cap := CapsuleMesh.new()
-	sm_cap.radius = 0.018
-	sm_cap.height = 0.11
-	sm_cap.material = mat_white
-	smile.mesh = sm_cap
-	smile.position = Vector3(0.0, -0.095, 0.285)
-	smile.rotation.z = deg_to_rad(90.0)
-	head_pivot.add_child(smile)
-
-	# Large Glossy Cartoon Eyes (Sclera + Colored Iris + Dark Pupil + Twin Sparkle Highlights)
+	# Big Expressive Multi-Layered Anime Eyes (Sclera + Colored Iris + Dark Pupil + Dual Catchlights + Upper Eyelid + Eyebrow)
 	for side_dir in [-1, 1]:
-		var s_f: float = float(side_dir)
-		var eye_white := MeshInstance3D.new()
-		var ew_mesh := SphereMesh.new()
-		ew_mesh.radius = 0.078
-		ew_mesh.height = 0.155
-		ew_mesh.material = mat_white
-		eye_white.mesh = ew_mesh
-		eye_white.position = Vector3(s_f * 0.115, 0.04, 0.252)
-		head_pivot.add_child(eye_white)
+		var sf: float = float(side_dir)
+		_add_part(head_pivot, _make_sphere(0.082, 0.162, mat_white), Vector3(sf * 0.118, 0.038, 0.250))
+		_add_part(head_pivot, _make_sphere(0.056, 0.110, mat_eye_iris), Vector3(sf * 0.118, 0.038, 0.286))
+		_add_part(head_pivot, _make_sphere(0.034, 0.068, mat_eye_dark), Vector3(sf * 0.118, 0.038, 0.312))
+		# Top-outer big starlight catchlight + bottom-inner mini catchlight
+		_add_part(head_pivot, _make_sphere(0.020, 0.040, mat_white), Vector3(sf * 0.136, 0.066, 0.332))
+		_add_part(head_pivot, _make_sphere(0.011, 0.022, mat_white), Vector3(sf * 0.102, 0.016, 0.330))
+		# Upper Eyelash / Eyelid Ridge
+		_add_part(head_pivot, _make_capsule(0.016, 0.125, mat_eye_dark), Vector3(sf * 0.118, 0.105, 0.286), Vector3(0.0, 0.0, 90.0 - sf * 6.0))
+		if char_style == "salma_girl":
+			# Salma's Curved Side Wing Eyelashes!
+			_add_part(head_pivot, _make_capsule(0.012, 0.065, mat_eye_dark), Vector3(sf * 0.175, 0.095, 0.272), Vector3(0.0, 0.0, 90.0 - sf * 32.0))
+		# Expressive Eyebrow
+		_add_part(head_pivot, _make_capsule(0.018, 0.115, mat_hair), Vector3(sf * 0.118, 0.152, 0.268), Vector3(0.0, 0.0, 90.0 - sf * (4.0 if char_style == "salma_girl" else 11.0)))
 
-		var iris := MeshInstance3D.new()
-		var ir_mesh := SphereMesh.new()
-		ir_mesh.radius = 0.052
-		ir_mesh.height = 0.102
-		ir_mesh.material = mat_eye_iris
-		iris.mesh = ir_mesh
-		iris.position = Vector3(s_f * 0.115, 0.04, 0.288)
-		head_pivot.add_child(iris)
-
-		var pupil := MeshInstance3D.new()
-		var p_mesh := SphereMesh.new()
-		p_mesh.radius = 0.032
-		p_mesh.height = 0.064
-		p_mesh.material = mat_eye_dark
-		pupil.mesh = p_mesh
-		pupil.position = Vector3(s_f * 0.115, 0.04, 0.312)
-		head_pivot.add_child(pupil)
-
-		var highlight := MeshInstance3D.new()
-		var h_mesh := SphereMesh.new()
-		h_mesh.radius = 0.018
-		h_mesh.height = 0.036
-		h_mesh.material = mat_white
-		highlight.mesh = h_mesh
-		highlight.position = Vector3(s_f * 0.132, 0.066, 0.332)
-		head_pivot.add_child(highlight)
-
-		var brow := MeshInstance3D.new()
-		var b_mesh := CapsuleMesh.new()
-		b_mesh.radius = 0.018
-		b_mesh.height = 0.11
-		b_mesh.material = mat_hair
-		brow.mesh = b_mesh
-		brow.position = Vector3(s_f * 0.115, 0.145, 0.268)
-		brow.rotation.z = deg_to_rad(90.0 - s_f * 10.0)
-		head_pivot.add_child(brow)
-
-	# Stylized Smooth Hair & Distinct Headgear per Skin (No brown boxes on the forehead!)
-	var hair_cap := MeshInstance3D.new()
-	var hc_mesh := SphereMesh.new()
-	hc_mesh.radius = 0.318
-	hc_mesh.height = 0.38
-	hc_mesh.material = mat_primary if headgear_type == "ninja_hood" else mat_hair
-	hair_cap.mesh = hc_mesh
-	hair_cap.position = Vector3(0.0, 0.13, -0.03)
-	head_pivot.add_child(hair_cap)
-
-	# Smooth rounded hair swoop bangs
-	for swoop_i in range(3):
-		var sw := MeshInstance3D.new()
-		var sw_cap := CapsuleMesh.new()
-		sw_cap.radius = 0.055
-		sw_cap.height = 0.22
-		sw_cap.material = mat_primary if headgear_type == "ninja_hood" else mat_hair
-		sw.mesh = sw_cap
-		var off_x: float = float(swoop_i - 1) * 0.11
-		sw.position = Vector3(off_x, 0.23, 0.21)
-		sw.rotation = Vector3(deg_to_rad(65.0), deg_to_rad(float(swoop_i - 1) * 18.0), deg_to_rad(25.0))
-		head_pivot.add_child(sw)
-
-	# Distinct Heroic Crown / Helmet / Halo
-	var crown_band := MeshInstance3D.new()
-	var cb_mesh := CylinderMesh.new()
-	cb_mesh.top_radius = 0.235
-	cb_mesh.bottom_radius = 0.215
-	cb_mesh.height = 0.12
-	cb_mesh.material = mat_gold
-	crown_band.mesh = cb_mesh
-	crown_band.position = Vector3(0.0, 0.31, 0.0)
-	head_pivot.add_child(crown_band)
-
-	var peak_count: int = 7 if headgear_type == "supreme_crown" else 5
-	for peak_i in range(peak_count):
-		var ang: float = float(peak_i) * TAU / float(peak_count)
-		var peak := MeshInstance3D.new()
-		var pk_cone := CylinderMesh.new()
-		pk_cone.top_radius = 0.01
-		pk_cone.bottom_radius = 0.048
-		pk_cone.height = 0.13
-		pk_cone.material = mat_gold
-		peak.mesh = pk_cone
-		peak.position = Vector3(sin(ang) * 0.205, 0.40, cos(ang) * 0.205)
-		head_pivot.add_child(peak)
-
-		var tip_gem := MeshInstance3D.new()
-		var tg_sph := SphereMesh.new()
-		tg_sph.radius = 0.024
-		tg_sph.height = 0.048
-		tg_sph.material = mat_sapphire if (peak_i % 2 == 0) else mat_ruby
-		tip_gem.mesh = tg_sph
-		tip_gem.position = Vector3(sin(ang) * 0.205, 0.47, cos(ang) * 0.205)
-		head_pivot.add_child(tip_gem)
-
-	var crown_gem := MeshInstance3D.new()
-	var cg_mesh := SphereMesh.new()
-	cg_mesh.radius = 0.052
-	cg_mesh.height = 0.104
-	cg_mesh.material = mat_sapphire
-	crown_gem.mesh = cg_mesh
-	crown_gem.position = Vector3(0.0, 0.32, 0.225)
-	head_pivot.add_child(crown_gem)
-
-	if headgear_type in ["spartan_crest", "valkyrie_helm"]:
-		var crest_plume := MeshInstance3D.new()
-		var cp_cap := CapsuleMesh.new()
-		cp_cap.radius = 0.065
-		cp_cap.height = 0.44
-		cp_cap.material = mat_ruby if headgear_type == "spartan_crest" else mat_sapphire
-		crest_plume.mesh = cp_cap
-		crest_plume.position = Vector3(0.0, 0.48, -0.02)
-		crest_plume.rotation.x = deg_to_rad(82.0)
-		head_pivot.add_child(crest_plume)
-	elif headgear_type in ["winged_helm", "valkyrie_helm"]:
+	# =========================================================
+	# 3. DISTINCT SCULPTED HAIRSTYLE & HEADGEAR PER HERO
+	# =========================================================
+	if char_style == "salma_girl":
+		# SALMA'S SCULPTED HAIR + BANGS + LONG WAVY TWIN PIGTAILS + RIBBON BOWS + PRINCESS TIARA:
+		_add_part(head_pivot, _make_sphere(0.324, 0.42, mat_hair), Vector3(0.0, 0.12, -0.04))
+		# Front Fringe Bangs (5 sculpted locks)
+		for b_i in range(-2, 3):
+			var bf: float = float(b_i)
+			_add_part(
+				head_pivot,
+				_make_capsule(0.048, 0.22, mat_hair),
+				Vector3(bf * 0.065, 0.22, 0.22 - absf(bf) * 0.02),
+				Vector3(62.0, bf * 14.0, bf * 10.0)
+			)
+		# Cute Face-Framing Side Locks
 		for side_dir in [-1, 1]:
 			var sf: float = float(side_dir)
-			var h_wing := MeshInstance3D.new()
-			var hw_cap := CapsuleMesh.new()
-			hw_cap.radius = 0.038
-			hw_cap.height = 0.28
-			hw_cap.material = mat_gold
-			h_wing.mesh = hw_cap
-			h_wing.position = Vector3(sf * 0.27, 0.38, 0.0)
-			h_wing.rotation.z = deg_to_rad(-sf * 28.0)
-			head_pivot.add_child(h_wing)
-	elif headgear_type in ["wizard_halo", "sun_halo"]:
-		var halo := MeshInstance3D.new()
-		var hl_cyl := CylinderMesh.new()
-		hl_cyl.top_radius = 0.28
-		hl_cyl.bottom_radius = 0.28
-		hl_cyl.height = 0.035
-		hl_cyl.material = mat_sapphire if headgear_type == "wizard_halo" else mat_gold
-		halo.mesh = hl_cyl
-		halo.position = Vector3(0.0, 0.56, 0.0)
-		head_pivot.add_child(halo)
+			_add_part(head_pivot, _make_capsule(0.045, 0.26, mat_hair), Vector3(sf * 0.26, 0.02, 0.16), Vector3(15.0, 0.0, -sf * 12.0))
+			# Big Butterfly Silk Ribbon Bows
+			_add_part(head_pivot, _make_sphere(0.055, 0.10, mat_gold), Vector3(sf * 0.32, 0.15, -0.03))
+			_add_part(head_pivot, _make_capsule(0.058, 0.18, mat_primary_light), Vector3(sf * 0.34, 0.19, 0.03), Vector3(35.0, 0.0, -sf * 25.0))
+			_add_part(head_pivot, _make_capsule(0.058, 0.18, mat_primary_light), Vector3(sf * 0.34, 0.11, -0.09), Vector3(-35.0, 0.0, -sf * 25.0))
+			# Flowing 3-Segment Wavy Twin Pigtails!
+			_add_part(head_pivot, _make_capsule(0.092, 0.30, mat_hair), Vector3(sf * 0.40, 0.04, -0.06), Vector3(10.0, 0.0, -sf * 34.0))
+			_add_part(head_pivot, _make_capsule(0.082, 0.30, mat_hair), Vector3(sf * 0.48, -0.14, -0.08), Vector3(16.0, 0.0, -sf * 18.0))
+			_add_part(head_pivot, _make_capsule(0.064, 0.24, mat_hair), Vector3(sf * 0.51, -0.30, -0.05), Vector3(22.0, 0.0, -sf * 6.0))
+		# Golden Princess Tiara with Ruby Heart Center & Pearl Studs
+		_add_part(head_pivot, _make_cyl(0.22, 0.21, 0.09, mat_gold), Vector3(0.0, 0.31, 0.02))
+		_add_part(head_pivot, _make_cyl(0.02, 0.08, 0.16, mat_gold), Vector3(0.0, 0.40, 0.19))
+		_add_part(head_pivot, _make_sphere(0.054, 0.105, mat_ruby), Vector3(0.0, 0.35, 0.225))
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(head_pivot, _make_cyl(0.015, 0.05, 0.12, mat_gold), Vector3(sf * 0.13, 0.38, 0.15))
+			_add_part(head_pivot, _make_sphere(0.028, 0.055, mat_white), Vector3(sf * 0.13, 0.44, 0.15))
 
-	# 3. LEFT & RIGHT ARMS + GOLDEN WRIST BRACERS
+	elif char_style == "ahmed_kid2":
+		# LITTLE AHMED'S TWO-TONE STAR BASEBALL CAP + SPIKY HAIR TUFTS PEEKING OUT:
+		_add_part(head_pivot, _make_sphere(0.326, 0.38, mat_secondary), Vector3(0.0, 0.15, -0.02))
+		_add_part(head_pivot, _make_cyl(0.318, 0.318, 0.07, mat_gold), Vector3(0.0, 0.17, 0.0))
+		_add_part(head_pivot, _make_sphere(0.045, 0.08, mat_gold), Vector3(0.0, 0.35, -0.02))
+		# Curved Golden Visor Brim + Front Star Badge
+		_add_part(head_pivot, _make_box(Vector3(0.40, 0.055, 0.26), mat_gold), Vector3(0.0, 0.19, 0.26), Vector3(12.0, 0.0, 0.0))
+		_add_part(head_pivot, _make_sphere(0.052, 0.10, mat_sapphire), Vector3(0.0, 0.26, 0.29))
+		# Spiky Chestnut Hair Tufts peeking under the cap front & sides!
+		for b_i in range(-1, 2):
+			var bf: float = float(b_i)
+			_add_part(head_pivot, _make_capsule(0.044, 0.18, mat_hair), Vector3(bf * 0.10, 0.17, 0.25), Vector3(70.0, bf * 22.0, 15.0))
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(head_pivot, _make_capsule(0.048, 0.18, mat_hair), Vector3(sf * 0.28, 0.08, 0.10), Vector3(20.0, 0.0, -sf * 30.0))
+
+	else:
+		# HERO AHMED'S LAYERED SPIKY ANIME HAIR + ROYAL 5-PEAK OLYMPUS CROWN:
+		_add_part(head_pivot, _make_sphere(0.322, 0.40, mat_hair), Vector3(0.0, 0.13, -0.03))
+		# 5 Sculpted Spiky Front & Side Anime Bangs
+		for b_i in range(-2, 3):
+			var bf: float = float(b_i)
+			_add_part(
+				head_pivot,
+				_make_capsule(0.054, 0.24, mat_hair),
+				Vector3(bf * 0.085, 0.22, 0.22 - absf(bf) * 0.025),
+				Vector3(64.0, bf * 18.0, 18.0 + bf * 12.0)
+			)
+		# Back & Side Hero Hair Spikes
+		for side_dir in [-1, 1]:
+			var sf: float = float(side_dir)
+			_add_part(head_pivot, _make_capsule(0.058, 0.24, mat_hair), Vector3(sf * 0.29, 0.12, -0.02), Vector3(0.0, 0.0, -sf * 42.0))
+			_add_part(head_pivot, _make_capsule(0.055, 0.22, mat_hair), Vector3(sf * 0.22, 0.10, -0.24), Vector3(-35.0, sf * 25.0, -sf * 28.0))
+		# Royal 5-Peak Golden Olympus Crown with Jewels
+		_add_part(head_pivot, _make_cyl(0.235, 0.215, 0.12, mat_gold), Vector3(0.0, 0.31, 0.0))
+		for peak_i in range(5):
+			var ang: float = float(peak_i) * TAU / 5.0
+			_add_part(head_pivot, _make_cyl(0.01, 0.05, 0.14, mat_gold), Vector3(sin(ang) * 0.205, 0.40, cos(ang) * 0.205))
+			_add_part(
+				head_pivot,
+				_make_sphere(0.026, 0.052, mat_sapphire if (peak_i % 2 == 0) else mat_ruby),
+				Vector3(sin(ang) * 0.205, 0.475, cos(ang) * 0.205)
+			)
+		_add_part(head_pivot, _make_sphere(0.054, 0.108, mat_sapphire), Vector3(0.0, 0.32, 0.228))
+
+	# =========================================================
+	# 4. LEFT & RIGHT ARMS + GAUNTLETS & HANDS
+	# =========================================================
 	var arm_names := ["LeftArmPivot", "RightArmPivot"]
 	var arm_xs := [-0.36, 0.36]
 	for a_i in range(2):
@@ -388,72 +325,34 @@ static func build_character_visual(skin_id: int = 0) -> Node3D:
 		arm_pivot.position = Vector3(arm_xs[a_i], 0.80, 0.0)
 		root.add_child(arm_pivot)
 
-		var sleeve := MeshInstance3D.new()
-		var s_mesh := CapsuleMesh.new()
-		s_mesh.radius = 0.088
-		s_mesh.height = 0.36
-		s_mesh.material = mat_primary
-		sleeve.mesh = s_mesh
-		sleeve.position = Vector3(0.0, -0.14, 0.0)
-		arm_pivot.add_child(sleeve)
+		var sleeve_mat: StandardMaterial3D = mat_skin if char_style == "salma_girl" else mat_primary
+		_add_part(arm_pivot, _make_capsule(0.086, 0.35, sleeve_mat), Vector3(0.0, -0.14, 0.0))
+		_add_part(arm_pivot, _make_cyl(0.092, 0.086, 0.09, mat_gold), Vector3(0.0, -0.23, 0.0))
+		_add_part(arm_pivot, _make_sphere(0.088, 0.172, mat_skin), Vector3(0.0, -0.32, 0.0))
 
-		var bracer := MeshInstance3D.new()
-		var br_cyl := CylinderMesh.new()
-		br_cyl.top_radius = 0.092
-		br_cyl.bottom_radius = 0.088
-		br_cyl.height = 0.09
-		br_cyl.material = mat_gold
-		bracer.mesh = br_cyl
-		bracer.position = Vector3(0.0, -0.23, 0.0)
-		arm_pivot.add_child(bracer)
-
-		var hand := MeshInstance3D.new()
-		var h_mesh := SphereMesh.new()
-		h_mesh.radius = 0.088
-		h_mesh.height = 0.175
-		h_mesh.material = mat_skin
-		hand.mesh = h_mesh
-		hand.position = Vector3(0.0, -0.32, 0.0)
-		arm_pivot.add_child(hand)
-
-	# 4. LEFT & RIGHT LEGS + ROUNDED WINGED SNEAKERS
+	# =========================================================
+	# 5. LEFT & RIGHT LEGS + DETAILED 3D FOOTWEAR
+	# =========================================================
 	var leg_names := ["LeftLegPivot", "RightLegPivot"]
 	var leg_xs := [-0.15, 0.15]
 	for l_i in range(2):
+		var sf: float = -1.0 if l_i == 0 else 1.0
 		var leg_pivot := Node3D.new()
 		leg_pivot.name = leg_names[l_i]
 		leg_pivot.position = Vector3(leg_xs[l_i], 0.38, 0.0)
 		root.add_child(leg_pivot)
 
-		var pant := MeshInstance3D.new()
-		var p_mesh := CapsuleMesh.new()
-		p_mesh.radius = 0.10
-		p_mesh.height = 0.34
-		p_mesh.material = mat_dark_pants
-		pant.mesh = p_mesh
-		pant.position = Vector3(0.0, -0.14, 0.0)
-		leg_pivot.add_child(pant)
-
-		var shoe := MeshInstance3D.new()
-		var sh_mesh := CapsuleMesh.new()
-		sh_mesh.radius = 0.105
-		sh_mesh.height = 0.30
-		sh_mesh.material = mat_primary
-		shoe.mesh = sh_mesh
-		shoe.position = Vector3(0.0, -0.30, 0.045)
-		shoe.rotation.x = deg_to_rad(90.0)
-		leg_pivot.add_child(shoe)
-
-		var sole := MeshInstance3D.new()
-		var so_mesh := CylinderMesh.new()
-		so_mesh.top_radius = 0.11
-		so_mesh.bottom_radius = 0.115
-		so_mesh.height = 0.045
-		so_mesh.material = mat_white
-		sole.mesh = so_mesh
-		sole.position = Vector3(0.0, -0.36, 0.045)
-		sole.scale = Vector3(1.0, 1.0, 1.35)
-		leg_pivot.add_child(sole)
+		var leg_mat: StandardMaterial3D = mat_white if char_style == "salma_girl" else mat_navy
+		_add_part(leg_pivot, _make_capsule(0.098, 0.34, leg_mat), Vector3(0.0, -0.14, 0.0))
+		# Golden Knee Guard / Sock Band
+		_add_part(leg_pivot, _make_cyl(0.104, 0.102, 0.045, mat_gold), Vector3(0.0, -0.18, 0.0))
+		# Sculpted Two-Tone Sneaker / Mary-Jane Shoe
+		_add_part(leg_pivot, _make_capsule(0.105, 0.30, mat_primary), Vector3(0.0, -0.30, 0.045), Vector3(90.0, 0.0, 0.0))
+		_add_part(leg_pivot, _make_sphere(0.098, 0.18, mat_white if char_style != "salma_girl" else mat_gold), Vector3(0.0, -0.30, 0.135))
+		_add_part(leg_pivot, _make_cyl(0.112, 0.118, 0.048, mat_white if char_style != "ahmed_kid2" else mat_sapphire), Vector3(0.0, -0.36, 0.045), Vector3.ZERO, Vector3(1.0, 1.0, 1.38))
+		if char_style == "ahmed_hero":
+			# Mini Golden Hermes Ankle Wings on Hero Ahmed's boots!
+			_add_part(leg_pivot, _make_capsule(0.025, 0.16, mat_gold), Vector3(sf * 0.11, -0.26, -0.02), Vector3(-25.0, 0.0, -sf * 25.0))
 
 	return root
 
@@ -523,8 +422,8 @@ static func animate_character(
 			right_leg.rotation.x = deg_to_rad(26.0)
 		return
 
-	if horiz_speed > 0.45:
-		var run_phase: float = anim_time * (9.5 + clampf(horiz_speed * 0.45, 0.0, 5.0))
+	if horiz_speed > 0.35:
+		var run_phase: float = anim_time * (9.5 + clampf(horiz_speed * 0.50, 0.0, 5.0))
 		var swing: float = sin(run_phase) * 0.88
 		var bob: float = absf(cos(run_phase)) * 0.06
 		if torso_pivot:
@@ -581,7 +480,6 @@ static func make_world_banner_texture(sky_top: Color, sky_bot: Color, prim_col: 
 			elif d_sun < 24.0:
 				c = c.lerp(acc_col, 0.35)
 
-			# Floating mythological island silhouette
 			var island_top: int = 54 + int(sin(float(x) * 0.08) * 3.0)
 			if x > 24 and x < 136 and y >= island_top:
 				var half_w: int = 56 - int(float(y - island_top) * 1.25)
@@ -590,11 +488,9 @@ static func make_world_banner_texture(sky_top: Color, sky_bot: Color, prim_col: 
 						c = prim_col.lightened(0.18)
 					else:
 						c = prim_col.darkened(0.38)
-					# Glowing waterfall in center
 					if abs(x - 80) <= 6 and y >= island_top + 4:
 						c = Color(0.0, 0.90, 1.0)
 
-			# Greek temple pillars & golden roof on top of island
 			if y >= 32 and y < island_top and x >= 56 and x <= 104:
 				if y < 39 and abs(x - 80) <= (y - 31) * 3:
 					c = acc_col
@@ -605,15 +501,16 @@ static func make_world_banner_texture(sky_top: Color, sky_bot: Color, prim_col: 
 	return ImageTexture.create_from_image(img)
 
 static func make_character_portrait_texture(skin_id: int) -> ImageTexture:
-	var idx: int = clampi(skin_id, 0, SKIN_COLORS.size() - 1)
+	var idx: int = clampi(skin_id % 3, 0, 2)
 	var skin: Dictionary = SKIN_COLORS[idx]
 	var prim_col: Color = skin["primary"]
 	var sec_col: Color = skin["secondary"]
+	var char_style: String = str(skin["style"])
 	var w: int = 128
 	var h: int = 128
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	var gold := Color(1.0, 0.84, 0.18)
-	var face_col := Color(1.0, 0.83, 0.70) if idx != 6 else Color(0.20, 0.22, 0.30)
+	var face_col := Color(1.0, 0.85, 0.74)
 
 	for y in range(h):
 		var ty: float = float(y) / float(h)
@@ -622,10 +519,21 @@ static func make_character_portrait_texture(skin_id: int) -> ImageTexture:
 			var dy: float = float(y - 64)
 			var dist: float = sqrt(dx * dx + dy * dy)
 			var c: Color = prim_col.darkened(0.55).lerp(sec_col.darkened(0.35), ty)
-			if dist < 54.0 and dist > 49.0:
+			if dist < 58.0 and dist > 52.0:
 				c = gold
-			elif dist < 49.0:
-				c = c.lerp(prim_col, 0.25)
+			elif dist < 52.0:
+				c = c.lerp(prim_col, 0.30)
+
+			# Salma Twin Pigtails & Pink Bows on Portrait
+			if char_style == "salma_girl":
+				var lp: float = sqrt(float((x - 35) * (x - 35) + (y - 62) * (y - 62)))
+				var rp: float = sqrt(float((x - 93) * (x - 93) + (y - 62) * (y - 62)))
+				if lp <= 14.0 or rp <= 14.0:
+					c = Color(0.24, 0.09, 0.14)
+				var lbow: float = sqrt(float((x - 38) * (x - 38) + (y - 46) * (y - 46)))
+				var rbow: float = sqrt(float((x - 90) * (x - 90) + (y - 46) * (y - 46)))
+				if lbow <= 7.0 or rbow <= 7.0:
+					c = Color(1.0, 0.45, 0.76)
 
 			# Hero Torso & Golden Emblem
 			if y >= 78 and y <= 116 and abs(x - 64) <= 28:
@@ -633,27 +541,34 @@ static func make_character_portrait_texture(skin_id: int) -> ImageTexture:
 				if y <= 85:
 					c = gold
 				elif abs(x - 64) <= 7 and abs(y - 96) <= 7:
-					c = Color(0.0, 0.88, 1.0)
+					c = Color(1.0, 0.18, 0.42) if char_style == "salma_girl" else Color(0.0, 0.88, 1.0)
 
 			# Hero Face Circle
 			var h_dist: float = sqrt(float((x - 64) * (x - 64) + (y - 56) * (y - 56)))
 			if h_dist <= 22.0:
 				c = face_col
-				# Expressive Eyes
 				var le: float = sqrt(float((x - 55) * (x - 55) + (y - 55) * (y - 55)))
 				var re: float = sqrt(float((x - 73) * (x - 73) + (y - 55) * (y - 55)))
-				if le <= 4.5 or re <= 4.5:
-					c = Color(0.06, 0.10, 0.20)
-				if le <= 1.8 or re <= 1.8:
+				if le <= 4.8 or re <= 4.8:
+					c = Color(0.68, 0.18, 0.88) if char_style == "salma_girl" else Color(0.06, 0.24, 0.56)
+				if le <= 2.6 or re <= 2.6:
+					c = Color(0.05, 0.08, 0.16)
+				var lh: float = sqrt(float((x - 53) * (x - 53) + (y - 53) * (y - 53)))
+				var rh: float = sqrt(float((x - 71) * (x - 71) + (y - 53) * (y - 53)))
+				if lh <= 1.8 or rh <= 1.8:
 					c = Color.WHITE
 
-			# Golden Crown above Head
-			if y >= 22 and y <= 37 and abs(x - 64) <= 20:
-				var crown_wave: int = 22 + int(abs(((x - 44) % 10) - 5) * 2)
-				if y >= crown_wave:
-					c = gold
-					if abs(x - 64) <= 4 and abs(y - 31) <= 4:
-						c = Color(0.0, 0.90, 1.0)
+			# Kid Cap or Golden Crown above Head
+			if char_style == "ahmed_kid2":
+				if y >= 25 and y <= 40 and abs(x - 64) <= 23:
+					c = sec_col if y < 35 else gold
+			else:
+				if y >= 22 and y <= 37 and abs(x - 64) <= 20:
+					var crown_wave: int = 22 + int(abs(((x - 44) % 10) - 5) * 2)
+					if y >= crown_wave:
+						c = gold
+						if abs(x - 64) <= 4 and abs(y - 31) <= 4:
+							c = Color(1.0, 0.18, 0.38) if char_style == "salma_girl" else Color(0.0, 0.90, 1.0)
 
 			img.set_pixel(x, y, c)
 	return ImageTexture.create_from_image(img)
@@ -789,28 +704,27 @@ static func set_art_card_text(btn: Button, new_text: String) -> void:
 static func make_platform_tile_texture(base_col: Color, accent_col: Color) -> ImageTexture:
 	var s: int = 64
 	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
-	var light_c: Color = base_col.lightened(0.22)
+	var light_c: Color = base_col.lightened(0.26)
 	var mid_c: Color = base_col
-	var dark_c: Color = base_col.darkened(0.28)
-	var gold_c: Color = accent_col.lerp(Color.WHITE, 0.25)
+	var dark_c: Color = base_col.darkened(0.32)
+	var gold_c: Color = accent_col.lerp(Color.WHITE, 0.30)
 
 	for y in range(s):
 		for x in range(s):
-			var c: Color = mid_c
 			var gx: int = x % 32
 			var gy: int = y % 32
 			var tile_alt: bool = ((int(x / 32) + int(y / 32)) % 2 == 0)
-			c = light_c if tile_alt else mid_c
-			# Tile bevel & crisp grout border
-			if gx <= 1 or gy <= 1:
+			var c: Color = light_c if tile_alt else mid_c
+			if gx <= 1 or gy <= 1 or gx == 31 or gy == 31:
 				c = dark_c
 			elif gx == 2 or gy == 2:
-				c = c.lightened(0.18)
-			# Center Mythoria diamond inlay
+				c = c.lightened(0.24)
+			elif gx == 29 or gy == 29:
+				c = c.lerp(gold_c, 0.35)
 			var dx: int = abs(gx - 16)
 			var dy: int = abs(gy - 16)
-			if dx + dy <= 5:
-				c = c.lerp(gold_c, 0.35 if (dx + dy <= 3) else 0.18)
+			if dx + dy <= 7:
+				c = c.lerp(gold_c, 0.55 if (dx + dy <= 3) else 0.28)
 			img.set_pixel(x, y, c)
 	return ImageTexture.create_from_image(img)
 
@@ -829,18 +743,22 @@ static func make_finish_checker_texture(accent_col: Color) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 static func make_textured_platform_mat(col: Color, acc: Color, is_finish: bool = false) -> StandardMaterial3D:
+	var cache_key: String = "%s_%s_%s" % [col.to_html(false), acc.to_html(false), "1" if is_finish else "0"]
+	if _platform_mat_cache.has(cache_key):
+		return _platform_mat_cache[cache_key]
 	var m := StandardMaterial3D.new()
 	m.albedo_color = Color.WHITE
 	m.albedo_texture = make_finish_checker_texture(acc) if is_finish else make_platform_tile_texture(col, acc)
 	m.uv1_triplanar = true
 	m.uv1_scale = Vector3(0.32, 0.32, 0.32)
-	m.roughness = 0.26 if is_finish else 0.34
-	m.metallic = 0.24 if is_finish else 0.10
+	m.roughness = 0.20 if is_finish else 0.25
+	m.metallic = 0.28 if is_finish else 0.16
 	m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 	if is_finish:
 		m.emission_enabled = true
 		m.emission = acc
-		m.emission_energy_multiplier = 0.22
+		m.emission_energy_multiplier = 0.16
+	_platform_mat_cache[cache_key] = m
 	return m
 
 static func build_blob_shadow() -> MeshInstance3D:
@@ -858,4 +776,3 @@ static func build_blob_shadow() -> MeshInstance3D:
 	mi.mesh = cyl
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
-

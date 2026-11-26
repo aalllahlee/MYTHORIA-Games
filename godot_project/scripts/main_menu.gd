@@ -1,9 +1,11 @@
 extends Node3D
 
 ## MYTHORIA games — By ahmed
-## 3D Interactive Main Menu Showcase + Illustrated Full-Bleed Art Buttons,
-## World Cards with Difficulty & Obstacle Previews, Live 3D Hero Wardrobe Preview,
-## Illustrated Missions/Events, Armory Shop & Settings.
+## 3D Interactive Main Menu Showcase with the 3 Exclusive Heroes:
+##   0: Ahmed (البطل أحمد)
+##   1: Salma (البطلة سلمى)
+##   2: Ahmed (أحمد الصغير)
+## All 3 Heroes stand together on the 3D Royal Podiums & swap live when selected!
 
 const CVB := preload("res://scripts/character_visual_builder.gd")
 
@@ -15,6 +17,7 @@ const CVB := preload("res://scripts/character_visual_builder.gd")
 @onready var coins_badge: Button = $UI/Root/TopRightBar/CoinsBadge
 @onready var stars_badge: Button = $UI/Root/TopRightBar/StarsBadge
 @onready var mode_button: Button = $UI/Root/TopRightBar/ModeButton
+@onready var lang_button: Button = $UI/Root/TopRightBar/LangButton
 @onready var missions_quick_btn: Button = $UI/Root/LeftQuickDock/MissionsQuickBtn
 @onready var daily_gift_quick_btn: Button = $UI/Root/LeftQuickDock/DailyGiftQuickBtn
 @onready var world_graph_quick_btn: Button = $UI/Root/LeftQuickDock/WorldGraphQuickBtn
@@ -41,18 +44,24 @@ var preview_skin_id: int = 0
 var current_tab: String = "WORLDS"
 var showcase_time: float = 0.0
 var hero_visual: Node3D = null
+var companion_left_pivot: Node3D = null
+var companion_right_pivot: Node3D = null
+var companion_left_visual: Node3D = null
+var companion_right_visual: Node3D = null
 var hero_yaw_deg: float = 0.0
 var bg_hammer_pivot: Node3D = null
 var bg_runners: Array = []
 var floating_clouds: Array = []
+var sky_crystals: Array = []
 var world_tex_cache: Dictionary = {}
 var event_tex_cache: Dictionary = {}
 var skin_tex_cache: Dictionary = {}
 
 func _ready() -> void:
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
+	AudioSynth.set_bgm_mode("menu")
 	selected_world_id = clampi(int((GameState.current_level_number - 1) / 5) + 1, 1, GameState.TOTAL_WORLDS)
-	preview_skin_id = GameState.selected_skin_id
+	preview_skin_id = clampi(GameState.selected_skin_id, 0, 2)
 	_connect_all_buttons()
 	_apply_ui_theme()
 	_build_3d_showcase_world()
@@ -66,6 +75,8 @@ func _connect_all_buttons() -> void:
 		stars_badge.pressed.connect(_on_worlds_tab_pressed)
 	if not mode_button.pressed.is_connected(_on_mode_button_pressed):
 		mode_button.pressed.connect(_on_mode_button_pressed)
+	if is_instance_valid(lang_button) and not lang_button.pressed.is_connected(_on_lang_button_pressed):
+		lang_button.pressed.connect(_on_lang_button_pressed)
 	if not missions_quick_btn.pressed.is_connected(_on_missions_tab_pressed):
 		missions_quick_btn.pressed.connect(_on_missions_tab_pressed)
 	if not daily_gift_quick_btn.pressed.is_connected(_on_daily_gift_pressed):
@@ -113,9 +124,10 @@ func _get_event_art_tex(key: String) -> Texture2D:
 	return event_tex_cache[key]
 
 func _get_skin_portrait_tex(s_id: int) -> ImageTexture:
-	if not skin_tex_cache.has(s_id):
-		skin_tex_cache[s_id] = CVB.make_character_portrait_texture(s_id)
-	return skin_tex_cache[s_id]
+	var cid: int = clampi(s_id % 3, 0, 2)
+	if not skin_tex_cache.has(cid):
+		skin_tex_cache[cid] = CVB.make_character_portrait_texture(cid)
+	return skin_tex_cache[cid]
 
 func _apply_ui_theme() -> void:
 	top_left_profile.add_theme_stylebox_override(
@@ -135,33 +147,34 @@ func _apply_ui_theme() -> void:
 		CVB.make_box_style(Color(0.04, 0.09, 0.24, 0.96), Color(1.0, 0.82, 0.18, 1.0), 22, 4, 12)
 	)
 
-	CVB.style_button(coins_badge, Color(0.10, 0.22, 0.52, 0.95), Color(1.0, 0.82, 0.18), Color(1.0, 0.92, 0.35), 17, 18, 3)
-	CVB.style_button(stars_badge, Color(0.10, 0.22, 0.52, 0.95), Color(0.0, 0.86, 1.0), Color(0.75, 0.96, 1.0), 17, 18, 3)
-	CVB.style_button(mode_button, Color(0.16, 0.30, 0.68, 0.95), Color(1.0, 0.82, 0.18), Color.WHITE, 16, 18, 3)
+	CVB.style_button(coins_badge, Color(0.10, 0.22, 0.52, 0.95), Color(1.0, 0.82, 0.18), Color(1.0, 0.92, 0.35), 16, 18, 3)
+	CVB.style_button(stars_badge, Color(0.10, 0.22, 0.52, 0.95), Color(0.0, 0.86, 1.0), Color(0.75, 0.96, 1.0), 16, 18, 3)
+	CVB.style_button(mode_button, Color(0.16, 0.30, 0.68, 0.95), Color(1.0, 0.82, 0.18), Color.WHITE, 15, 18, 3)
+	if is_instance_valid(lang_button):
+		CVB.style_button(lang_button, Color(0.12, 0.52, 0.38, 0.95), Color(0.45, 1.0, 0.78), Color.WHITE, 16, 18, 3)
 
-	# Full-Bleed Illustrated Event & Action Cards (NEVER text-only buttons!)
-	CVB.apply_art_card_button(missions_quick_btn, _get_event_art_tex("missions"), "🏆 EVENTS & MISSIONS", Color(1.0, 0.84, 0.22), 16, 18, 0.34)
-	CVB.apply_art_card_button(daily_gift_quick_btn, _get_event_art_tex("chest"), "🎁 DAILY TREASURE", Color(1.0, 0.78, 0.28), 16, 18, 0.32)
-	CVB.apply_art_card_button(world_graph_quick_btn, _get_world_banner_tex(3), "⚡ 10 WORLDS MAP", Color(0.0, 0.88, 1.0), 16, 18, 0.34)
+	CVB.apply_art_card_button(missions_quick_btn, _get_event_art_tex("missions"), GameState.tr_text("🏆 EVENTS & MISSIONS", "🏆 المهام والأحداث"), Color(1.0, 0.84, 0.22), 16, 18, 0.34)
+	CVB.apply_art_card_button(daily_gift_quick_btn, _get_event_art_tex("chest"), GameState.tr_text("🎁 DAILY TREASURE", "🎁 الكنز اليومي"), Color(1.0, 0.78, 0.28), 16, 18, 0.32)
+	CVB.apply_art_card_button(world_graph_quick_btn, _get_world_banner_tex(3), GameState.tr_text("⚡ 10 WORLDS MAP", "⚡ خريطة العوالم 10"), Color(0.0, 0.88, 1.0), 16, 18, 0.34)
 
-	CVB.apply_art_card_button(big_play_btn, _get_world_banner_tex(selected_world_id), "▶ PLAY (LV.1)", Color(1.0, 0.92, 0.32), 24, 20, 0.26)
-	CVB.apply_art_card_button(levels_btn, _get_world_banner_tex(1), "🌍 LEVELS & WORLDS", Color(0.42, 0.88, 1.0), 17, 16, 0.38)
-	CVB.apply_art_card_button(characters_btn, _get_event_art_tex("heroes"), "👑 HERO WARDROBE", Color(1.0, 0.84, 0.22), 17, 16, 0.36)
-	CVB.apply_art_card_button(shop_btn, _get_event_art_tex("speed"), "🛒 MYTHORIA SHOP", Color(1.0, 0.82, 0.24), 17, 16, 0.36)
-	CVB.apply_art_card_button(settings_btn, _get_world_banner_tex(5), "⚙ SETTINGS", Color(0.65, 0.86, 1.0), 16, 16, 0.44)
+	CVB.apply_art_card_button(big_play_btn, _get_world_banner_tex(selected_world_id), GameState.tr_text("▶ PLAY (LV.1)", "▶ العب الآن"), Color(1.0, 0.92, 0.32), 22, 20, 0.26)
+	CVB.apply_art_card_button(levels_btn, _get_world_banner_tex(1), GameState.tr_text("🌍 LEVELS & WORLDS", "🌍 المراحل والعوالم"), Color(0.42, 0.88, 1.0), 17, 16, 0.38)
+	CVB.apply_art_card_button(characters_btn, _get_event_art_tex("heroes"), GameState.tr_text("👑 3 HEROES: SALMA & AHMED", "👑 الأبطال 3: سلمى وأحمد"), Color(1.0, 0.84, 0.22), 16, 16, 0.36)
+	CVB.apply_art_card_button(shop_btn, _get_event_art_tex("speed"), GameState.tr_text("🛒 MYTHORIA SHOP", "🛒 متجر ميثوريا"), Color(1.0, 0.82, 0.24), 17, 16, 0.36)
+	CVB.apply_art_card_button(settings_btn, _get_world_banner_tex(5), GameState.tr_text("⚙ SETTINGS & AUDIO", "⚙ الإعدادات والصوت"), Color(0.65, 0.86, 1.0), 16, 16, 0.44)
 
 	CVB.style_button(prev_skin_btn, Color(1.0, 0.70, 0.08, 0.96), Color(1.0, 0.92, 0.48), Color.WHITE, 22, 16, 3)
 	CVB.style_button(next_skin_btn, Color(1.0, 0.70, 0.08, 0.96), Color(1.0, 0.92, 0.48), Color.WHITE, 22, 16, 3)
 	CVB.style_button(close_drawer_btn, Color(0.82, 0.18, 0.24, 0.96), Color(1.0, 0.75, 0.75), Color.WHITE, 17, 14, 3)
 
 func _build_3d_showcase_world() -> void:
-	var mat_gold := CVB.make_mat(Color(1.0, 0.82, 0.18), 0.18, 0.88, Color(1.0, 0.72, 0.10), 0.32)
+	var mat_gold := CVB.make_mat(Color(1.0, 0.82, 0.18), 0.18, 0.88, Color(1.0, 0.72, 0.10), 0.28)
 	var mat_royal_blue := CVB.make_mat(Color(0.10, 0.36, 0.82), 0.26, 0.28)
-	var mat_cyan_glow := CVB.make_mat(Color(0.0, 0.88, 1.0), 0.14, 0.30, Color(0.0, 0.78, 1.0), 1.6)
+	var mat_cyan_glow := CVB.make_mat(Color(0.0, 0.88, 1.0), 0.14, 0.30, Color(0.0, 0.78, 1.0), 0.55)
 	var mat_marble := CVB.make_textured_platform_mat(Color(0.92, 0.95, 1.0), Color(1.0, 0.84, 0.22), false)
 	var mat_grass := CVB.make_mat(Color(0.22, 0.80, 0.36), 0.44, 0.04)
 	var mat_rock := CVB.make_mat(Color(0.54, 0.42, 0.34), 0.65, 0.04)
-	var mat_flame := CVB.make_mat(Color(1.0, 0.56, 0.08), 0.15, 0.10, Color(1.0, 0.62, 0.10), 2.8)
+	var mat_flame := CVB.make_mat(Color(1.0, 0.56, 0.08), 0.15, 0.10, Color(1.0, 0.62, 0.10), 0.58)
 
 	# 1. Center Hero Pedestal (Multi-tiered Royal Blue, Cyan & Gold Podium)
 	_add_cyl(showcase_world, Vector3(0.0, -0.35, 0.0), 2.35, 2.55, 0.42, mat_royal_blue)
@@ -169,14 +182,30 @@ func _build_3d_showcase_world() -> void:
 	_add_cyl(showcase_world, Vector3(0.0, 0.04, 0.0), 1.58, 1.66, 0.12, mat_cyan_glow)
 	_add_cyl(showcase_world, Vector3(0.0, 0.12, 0.0), 1.42, 1.48, 0.08, mat_marble)
 
+	# 1b. Left & Right Companion Podiums for the other 2 Heroes!
+	for side_dir in [-1, 1]:
+		var px: float = float(side_dir) * 2.22
+		var pz: float = -0.82
+		_add_cyl(showcase_world, Vector3(px, -0.32, pz), 1.02, 1.15, 0.32, mat_royal_blue)
+		_add_cyl(showcase_world, Vector3(px, -0.10, pz), 0.86, 0.94, 0.12, mat_gold)
+		_add_cyl(showcase_world, Vector3(px, -0.02, pz), 0.76, 0.80, 0.06, mat_marble)
+
+	companion_left_pivot = Node3D.new()
+	companion_left_pivot.position = Vector3(-2.22, 0.02, -0.82)
+	showcase_world.add_child(companion_left_pivot)
+
+	companion_right_pivot = Node3D.new()
+	companion_right_pivot.position = Vector3(2.22, 0.02, -0.82)
+	showcase_world.add_child(companion_right_pivot)
+
 	# Twin Golden Fire Braziers flanking the Hero Pedestal
 	for side_dir in [-1, 1]:
-		var bx: float = float(side_dir) * 2.35
-		_add_box(showcase_world, Vector3(bx, -0.05, 0.35), Vector3(0.58, 0.55, 0.58), mat_marble)
-		_add_cyl(showcase_world, Vector3(bx, 0.32, 0.35), 0.38, 0.24, 0.24, mat_gold)
-		_add_sphere(showcase_world, Vector3(bx, 0.56, 0.35), 0.24, 0.46, mat_flame)
+		var bx: float = float(side_dir) * 2.85
+		_add_box(showcase_world, Vector3(bx, -0.05, 0.45), Vector3(0.54, 0.52, 0.54), mat_marble)
+		_add_cyl(showcase_world, Vector3(bx, 0.30, 0.45), 0.36, 0.22, 0.22, mat_gold)
+		_add_sphere(showcase_world, Vector3(bx, 0.52, 0.45), 0.22, 0.42, mat_flame)
 
-	# 2. Textured Background Obstacle Bridge & Distant Finish Arch
+	# 2. Winding Background Obstacle Bridge & Distant Finish Arch
 	var bridge_colors := [
 		Color(0.14, 0.56, 0.98),
 		Color(1.0, 0.76, 0.12),
@@ -186,28 +215,21 @@ func _build_3d_showcase_world() -> void:
 	for seg_i in range(6):
 		var col_mat := CVB.make_textured_platform_mat(bridge_colors[seg_i % bridge_colors.size()], Color(1.0, 0.84, 0.22), seg_i == 5)
 		var bz: float = -3.8 - float(seg_i) * 3.1
-		_add_box(showcase_world, Vector3(0.0, -0.35, bz), Vector3(3.4, 0.48, 2.7), col_mat)
+		var bx: float = sin(float(seg_i) * 0.8) * 1.1
+		_add_box(showcase_world, Vector3(bx, -0.35, bz), Vector3(3.6, 0.48, 2.7), col_mat)
 
 	bg_hammer_pivot = Node3D.new()
-	bg_hammer_pivot.position = Vector3(0.0, 0.45, -8.2)
+	bg_hammer_pivot.position = Vector3(0.6, 0.45, -8.2)
 	showcase_world.add_child(bg_hammer_pivot)
-	_add_cyl(bg_hammer_pivot, Vector3(0.0, 0.0, 0.0), 0.24, 0.28, 1.1, mat_gold)
-	_add_box(bg_hammer_pivot, Vector3(0.0, 0.22, 0.0), Vector3(3.8, 0.32, 0.32), CVB.make_mat(Color(0.92, 0.20, 0.22), 0.28, 0.20))
+	_add_cyl(bg_hammer_pivot, Vector3(0.0, 0.0, 0.0), 0.28, 0.34, 1.2, mat_gold)
+	_add_box(bg_hammer_pivot, Vector3(0.0, 0.25, 0.0), Vector3(4.0, 0.32, 0.32), CVB.make_mat(Color(0.92, 0.20, 0.22), 0.28, 0.20))
 
 	_add_cyl(showcase_world, Vector3(-1.45, 0.9, -18.5), 0.24, 0.24, 2.8, mat_marble)
 	_add_cyl(showcase_world, Vector3(1.45, 0.9, -18.5), 0.24, 0.24, 2.8, mat_marble)
 	_add_box(showcase_world, Vector3(0.0, 2.4, -18.5), Vector3(3.6, 0.55, 0.55), mat_gold)
 	_add_box(showcase_world, Vector3(0.0, 1.0, -18.5), Vector3(2.5, 2.2, 0.12), mat_cyan_glow)
 
-	for r_i in range(2):
-		var comp_vis: Node3D = CVB.build_character_visual((r_i + 2) % 8)
-		comp_vis.position = Vector3(-0.75 + float(r_i) * 1.5, -0.10, -5.8 - float(r_i) * 3.2)
-		comp_vis.rotation.y = PI
-		comp_vis.scale = Vector3(0.82, 0.82, 0.82)
-		showcase_world.add_child(comp_vis)
-		bg_runners.append(comp_vis)
-
-	# 3. Left & Right Floating Temple Sky Islands with Waterfalls
+	# 3. Left & Right Floating Temple Sky Islands with Waterfalls & Sky Crystals
 	for side_dir in [-1, 1]:
 		var side_f: float = float(side_dir)
 		var ix: float = side_f * 6.2
@@ -220,6 +242,9 @@ func _build_3d_showcase_world() -> void:
 			_add_cyl(showcase_world, Vector3(cx, 2.15, iz), 0.22, 0.25, 2.0, mat_marble)
 		_add_box(showcase_world, Vector3(ix, 3.3, iz), Vector3(3.1, 0.45, 1.8), mat_marble)
 		_add_cyl(showcase_world, Vector3(ix, 4.1, iz), 0.05, 1.45, 1.2, mat_gold)
+
+		var crystal := _add_cyl(showcase_world, Vector3(ix - side_f * 2.4, 3.2, iz + 2.5), 0.02, 0.45, 1.1, mat_cyan_glow)
+		sky_crystals.append(crystal)
 
 	var cloud_mat := CVB.make_mat(Color(0.98, 0.99, 1.0, 0.92), 0.65, 0.0)
 	var cloud_coords := [
@@ -273,12 +298,34 @@ func _add_sphere(parent: Node3D, pos: Vector3, r: float, h: float, mat: Material
 func _rebuild_hero_character(skin_id_to_show: int = -1) -> void:
 	for child in hero_pedestal_pivot.get_children():
 		child.queue_free()
-	var sid: int = GameState.selected_skin_id if skin_id_to_show < 0 else skin_id_to_show
+	var sid: int = clampi((GameState.selected_skin_id if skin_id_to_show < 0 else skin_id_to_show) % 3, 0, 2)
 	preview_skin_id = sid
 	hero_visual = CVB.build_character_visual(sid)
 	hero_visual.position = Vector3(0.0, 0.16, 0.0)
-	hero_visual.scale = Vector3(1.22, 1.22, 1.22)
+	var base_sc: float = 1.15 if sid == 2 else 1.24
+	hero_visual.scale = Vector3(base_sc, base_sc, base_sc)
 	hero_pedestal_pivot.add_child(hero_visual)
+
+	# Place the other 2 heroes on the Left & Right Companion Podiums so all 3 heroes are always visible!
+	var left_id: int = (sid + 1) % 3
+	var right_id: int = (sid + 2) % 3
+	if is_instance_valid(companion_left_pivot):
+		for ch in companion_left_pivot.get_children():
+			ch.queue_free()
+		companion_left_visual = CVB.build_character_visual(left_id)
+		var l_sc: float = 0.88 if left_id == 2 else 0.94
+		companion_left_visual.scale = Vector3(l_sc, l_sc, l_sc)
+		companion_left_visual.rotation.y = deg_to_rad(24.0)
+		companion_left_pivot.add_child(companion_left_visual)
+
+	if is_instance_valid(companion_right_pivot):
+		for ch in companion_right_pivot.get_children():
+			ch.queue_free()
+		companion_right_visual = CVB.build_character_visual(right_id)
+		var r_sc: float = 0.88 if right_id == 2 else 0.94
+		companion_right_visual.scale = Vector3(r_sc, r_sc, r_sc)
+		companion_right_visual.rotation.y = deg_to_rad(-24.0)
+		companion_right_pivot.add_child(companion_right_visual)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenDrag:
@@ -292,57 +339,85 @@ func _process(delta: float) -> void:
 		hero_visual.rotation.y = deg_to_rad(hero_yaw_deg) + sin(showcase_time * 1.1) * 0.28
 		CVB.animate_character(hero_visual, showcase_time, Vector3.ZERO, true, 0.0, false)
 
+	if is_instance_valid(companion_left_visual):
+		companion_left_visual.rotation.y = deg_to_rad(24.0) + sin(showcase_time * 1.4 + 1.0) * 0.22
+		CVB.animate_character(companion_left_visual, showcase_time + 0.6, Vector3.ZERO, true, 0.0, true)
+
+	if is_instance_valid(companion_right_visual):
+		companion_right_visual.rotation.y = deg_to_rad(-24.0) + cos(showcase_time * 1.3) * 0.22
+		CVB.animate_character(companion_right_visual, showcase_time + 1.2, Vector3.ZERO, true, 0.0, false)
+
 	if is_instance_valid(bg_hammer_pivot):
 		bg_hammer_pivot.rotation.y += delta * 2.2
-
-	for i in range(bg_runners.size()):
-		var runner: Node3D = bg_runners[i]
-		if is_instance_valid(runner):
-			CVB.animate_character(runner, showcase_time + float(i) * 0.8, Vector3(0, 0, -5.0), true, 0.0, false)
 
 	for i in range(floating_clouds.size()):
 		var cl: Node3D = floating_clouds[i]
 		if is_instance_valid(cl):
 			cl.position.x += sin(showcase_time * 0.4 + float(i)) * delta * 0.25
 
+	for i in range(sky_crystals.size()):
+		var cr: Node3D = sky_crystals[i]
+		if is_instance_valid(cr):
+			cr.rotation.y += delta * 1.8
+			cr.position.y = 3.2 + sin(showcase_time * 2.0 + float(i)) * 0.18
+
 func refresh_header() -> void:
-	var skin: Dictionary = GameState.get_skin_def(preview_skin_id)
-	var skin_name: String = str(skin["name"])
+	var skin_name: String = GameState.get_skin_display_name(preview_skin_id)
+	var equipped_name: String = GameState.get_skin_display_name(GameState.selected_skin_id)
 	var unlocked_worlds: int = GameState.get_unlocked_worlds_count()
 	var total_stars: int = GameState.get_total_stars()
 	var lvl: int = GameState.current_level_number
 	var w_id: int = int((lvl - 1) / 5) + 1
 	var goal_sec: int = int(GameState.goal_time_ms_for_level(lvl) / 1000)
 	var diff_prof: Dictionary = GameState.get_stage_difficulty_profile(lvl)
-	var is_owned: bool = GameState.unlocked_skins.has(preview_skin_id)
-	var status_tag: String = "" if is_owned else " [PREVIEW]"
+	var tier_txt: String = str(diff_prof["tier_name_ar"]) if GameState.is_arabic() else str(diff_prof["tier_name"])
 
-	profile_label.text = "👑 Lv.%d  |  %s\n🌍 Worlds Unlocked: %d / %d" % [
-		GameState.player_level,
-		str(GameState.get_skin_def(GameState.selected_skin_id)["name"]),
-		unlocked_worlds,
-		GameState.TOTAL_WORLDS
-	]
+	if GameState.is_arabic():
+		profile_label.text = "👑 مستوى %d  |  %s\n🌍 العوالم المفتوحة: %d / %d" % [
+			GameState.player_level,
+			equipped_name,
+			unlocked_worlds,
+			GameState.TOTAL_WORLDS
+		]
+	else:
+		profile_label.text = "👑 Lv.%d  |  %s\n🌍 Worlds Unlocked: %d / %d" % [
+			GameState.player_level,
+			equipped_name,
+			unlocked_worlds,
+			GameState.TOTAL_WORLDS
+		]
+
 	coins_badge.text = "🪙 %d +" % GameState.coins
 	stars_badge.text = "★ %d / 150" % total_stars
-	mode_button.text = "MODE: %s" % GameState.selected_game_mode
-	CVB.set_art_card_text(big_play_btn, "▶ PLAY (LV.%d)\n%s" % [lvl, str(diff_prof["tier_name"])])
-	pedestal_label.text = "♛ MYTHORIA games — By ahmed\n%s%s • W%d S%d (%s • <=%ds)" % [
+	mode_button.text = GameState.tr_text("MODE: %s" % GameState.selected_game_mode, "الطور: %s" % GameState.selected_game_mode)
+	if is_instance_valid(lang_button):
+		lang_button.text = "🌐 EN" if GameState.is_arabic() else "🌐 عربي"
+	close_drawer_btn.text = GameState.tr_text("✖ CLOSE", "✖ إغلاق")
+
+	CVB.set_art_card_text(missions_quick_btn, GameState.tr_text("🏆 EVENTS & MISSIONS", "🏆 المهام والأحداث"))
+	CVB.set_art_card_text(daily_gift_quick_btn, GameState.tr_text("🎁 DAILY TREASURE", "🎁 الكنز اليومي"))
+	CVB.set_art_card_text(world_graph_quick_btn, GameState.tr_text("⚡ 10 WORLDS MAP", "⚡ خريطة العوالم 10"))
+	CVB.set_art_card_text(big_play_btn, GameState.tr_text("▶ PLAY (LV.%d)\n%s" % [lvl, tier_txt], "▶ العب المرحلة %d\n%s" % [lvl, tier_txt]))
+	CVB.set_art_card_text(levels_btn, GameState.tr_text("🌍 LEVELS & WORLDS", "🌍 المراحل والعوالم"))
+	CVB.set_art_card_text(characters_btn, GameState.tr_text("👑 3 HEROES: SALMA & AHMED", "👑 الأبطال 3: سلمى وأحمد"))
+	CVB.set_art_card_text(shop_btn, GameState.tr_text("🛒 MYTHORIA SHOP", "🛒 متجر ميثوريا"))
+	CVB.set_art_card_text(settings_btn, GameState.tr_text("⚙ SETTINGS & AUDIO", "⚙ الإعدادات والصوت"))
+
+	pedestal_label.text = "♛ MYTHORIA games — By ahmed\n%s • W%d S%d (%s • <=%ds)" % [
 		skin_name,
-		status_tag,
 		w_id,
 		lvl,
-		str(diff_prof["tier_name"]),
+		tier_txt,
 		goal_sec
 	]
 
 func _set_drawer_layout(is_character_wardrobe: bool) -> void:
 	if is_character_wardrobe:
-		drawer_modal.offset_top = 340.0
+		drawer_modal.offset_top = 325.0
 		drawer_modal.offset_bottom = -14.0
-		world_rules_label.offset_top = 64.0
-		world_rules_label.offset_bottom = 92.0
-		$UI/Root/DrawerModal/ContentScroll.offset_top = 96.0
+		world_rules_label.offset_top = 62.0
+		world_rules_label.offset_bottom = 90.0
+		$UI/Root/DrawerModal/ContentScroll.offset_top = 94.0
 	else:
 		drawer_modal.offset_top = 82.0
 		drawer_modal.offset_bottom = -18.0
@@ -360,28 +435,28 @@ func _open_drawer(tab_name: String) -> void:
 	drawer_modal.visible = true
 
 	if tab_name == "WORLDS":
-		drawer_title.text = "🌍 WORLD SELECT & DIFFICULTY PROGRESSION"
+		drawer_title.text = GameState.tr_text("🌍 10 WORLDS — UNIQUE TRACK SHAPES & OBSTACLES", "🌍 العوالم الـ 10 — مسارات وعقبات بأشكال مختلفة")
 		world_scroll.visible = true
 		world_scroll.offset_bottom = 180.0
 		_set_drawer_layout(false)
 		rebuild_worlds_and_stages()
 	elif tab_name == "CHARACTERS":
-		drawer_title.text = "👑 3D HERO WARDROBE — TAP ANY HERO TO PREVIEW LIVE"
+		drawer_title.text = GameState.tr_text("👑 CHOOSE YOUR HERO: AHMED • SALMA • LITTLE AHMED", "👑 اختر بطلك: البطل أحمد • البطلة سلمى • أحمد الصغير")
 		world_scroll.visible = false
 		_set_drawer_layout(true)
 		rebuild_characters_tab()
 	elif tab_name == "MISSIONS":
-		drawer_title.text = "🏆 MYTHORIA EVENTS, MISSIONS & TREASURE CHEST"
+		drawer_title.text = GameState.tr_text("🏆 MYTHORIA EVENTS, MISSIONS & TREASURE CHEST", "🏆 مهام وأحداث ميثوريا وصندوق الكنز اليومي")
 		world_scroll.visible = false
 		_set_drawer_layout(false)
 		rebuild_missions_tab()
 	elif tab_name == "SHOP":
-		drawer_title.text = "🛒 MYTHORIA ROYAL ARMORY & ABILITY UPGRADES"
+		drawer_title.text = GameState.tr_text("🛒 MYTHORIA ROYAL ARMORY & ABILITY UPGRADES", "🛒 متجر ميثوريا الملكي وترقيات القدرات")
 		world_scroll.visible = false
 		_set_drawer_layout(false)
 		rebuild_shop_tab()
 	elif tab_name == "SETTINGS":
-		drawer_title.text = "⚙ GAME SETTINGS & PERFORMANCE"
+		drawer_title.text = GameState.tr_text("⚙ SETTINGS, MUSIC, SOUND & LANGUAGE (AR / EN)", "⚙ الإعدادات والموسيقى والصوت واللغة (عربي / EN)")
 		world_scroll.visible = false
 		_set_drawer_layout(false)
 		rebuild_settings_tab()
@@ -397,16 +472,18 @@ func rebuild_worlds_and_stages() -> void:
 		var w_theme: Dictionary = GameState.get_world_theme(w)
 		var unlocked: bool = GameState.is_world_unlocked(w)
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(236, 94)
+		btn.custom_minimum_size = Vector2(242, 94)
 		var prefix: String = "🌍 " if unlocked else "🔒 "
 		var prim_col: Color = w_theme["primary"]
 		var border_col: Color = Color(1.0, 0.88, 0.22) if (w == selected_world_id) else (prim_col if unlocked else Color(0.35, 0.40, 0.54))
+		var w_title: String = GameState.get_world_display_name(w)
+		var track_info: String = str(w_theme.get("track_desc_ar", "")) if GameState.is_arabic() else str(w_theme.get("track_desc", ""))
 		CVB.apply_art_card_button(
 			btn,
 			_get_world_banner_tex(w),
-			"%sW%d\n%s" % [prefix, w, str(w_theme["name"])],
+			"%sW%d: %s\n[%s]" % [prefix, w, w_title, track_info],
 			border_col,
-			15,
+			14,
 			16,
 			0.28 if (w == selected_world_id) else (0.42 if unlocked else 0.68)
 		)
@@ -422,22 +499,25 @@ func rebuild_worlds_and_stages() -> void:
 	var w_unlocked: bool = GameState.is_world_unlocked(selected_world_id)
 	var gate_lvl: int = selected_world_id * 5
 	var gate_goal_sec: int = int(GameState.goal_time_ms_for_level(gate_lvl) / 1000)
+	var w_cur_theme: Dictionary = GameState.get_world_theme(selected_world_id)
+	var cur_track_desc: String = str(w_cur_theme.get("track_desc_ar", "")) if GameState.is_arabic() else str(w_cur_theme.get("track_desc", ""))
 	if w_unlocked:
-		world_rules_label.text = "✅ WORLD %d UNLOCKED — Clear Gateway Stage %d within <= %ds to unlock World %d!" % [
-			selected_world_id, gate_lvl, gate_goal_sec, min(selected_world_id + 1, GameState.TOTAL_WORLDS)
-		]
+		world_rules_label.text = GameState.tr_text(
+			"✅ W%d (%s) — Clear Gate Stage %d within <= %ds to unlock Next World!" % [selected_world_id, cur_track_desc, gate_lvl, gate_goal_sec],
+			"✅ العالم %d (%s) — أنهِ مرحلة البوابة %d خلال %d ثانية لفتح العالم التالي!" % [selected_world_id, cur_track_desc, gate_lvl, gate_goal_sec]
+		)
 		world_rules_label.modulate = Color(0.35, 0.98, 0.72)
 	else:
 		var prev_gate: int = (selected_world_id - 1) * 5
 		var prev_goal_sec: int = int(GameState.goal_time_ms_for_level(prev_gate) / 1000)
-		world_rules_label.text = "🔒 WORLD %d LOCKED — Complete World %d Gateway Stage %d within <= %ds first!" % [
-			selected_world_id, selected_world_id - 1, prev_gate, prev_goal_sec
-		]
+		world_rules_label.text = GameState.tr_text(
+			"🔒 WORLD %d LOCKED — Complete World %d Gateway Stage %d within <= %ds first!" % [selected_world_id, selected_world_id - 1, prev_gate, prev_goal_sec],
+			"🔒 العالم %d مغلق — أنهِ مرحلة البوابة %d في العالم %d خلال %d ثانية أولاً!" % [selected_world_id, prev_gate, selected_world_id - 1, prev_goal_sec]
+		)
 		world_rules_label.modulate = Color(1.0, 0.50, 0.56)
 
 	var first_lvl: int = (selected_world_id - 1) * 5 + 1
-	var w_theme_cur: Dictionary = GameState.get_world_theme(selected_world_id)
-	var world_prim: Color = w_theme_cur["primary"]
+	var world_prim: Color = w_cur_theme["primary"]
 	var banner_tex: Texture2D = _get_world_banner_tex(selected_world_id)
 
 	for offset in range(5):
@@ -449,6 +529,8 @@ func rebuild_worlds_and_stages() -> void:
 		var is_gate: bool = ((offset + 1) == 5)
 		var diff_prof: Dictionary = GameState.get_stage_difficulty_profile(lvl)
 		var tier_col: Color = diff_prof["tier_color"]
+		var tier_txt: String = str(diff_prof["tier_name_ar"]) if GameState.is_arabic() else str(diff_prof["tier_name"])
+		var obs_txt: String = str(diff_prof["new_obstacle_ar"]) if GameState.is_arabic() else str(diff_prof["new_obstacle"])
 
 		var card_panel := PanelContainer.new()
 		card_panel.custom_minimum_size = Vector2(226, 290)
@@ -470,16 +552,19 @@ func rebuild_worlds_and_stages() -> void:
 		vbox.add_child(thumb)
 
 		var title_lbl := Label.new()
-		title_lbl.text = ("⚡ STAGE %d [GATE]" % lvl) if is_gate else ("STAGE %d" % lvl)
+		if GameState.is_arabic():
+			title_lbl.text = ("⚡ المرحلة %d [البوابة]" % lvl) if is_gate else ("المرحلة %d" % lvl)
+		else:
+			title_lbl.text = ("⚡ STAGE %d [GATE]" % lvl) if is_gate else ("STAGE %d" % lvl)
 		title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title_lbl.add_theme_font_size_override("font_size", 18)
 		title_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.28) if is_gate else Color.WHITE)
 		vbox.add_child(title_lbl)
 
 		var diff_lbl := Label.new()
-		diff_lbl.text = "%s\n%s" % [str(diff_prof["tier_name"]), str(diff_prof["new_obstacle"])]
+		diff_lbl.text = "%s\n%s" % [tier_txt, obs_txt]
 		diff_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		diff_lbl.add_theme_font_size_override("font_size", 13)
+		diff_lbl.add_theme_font_size_override("font_size", 12)
 		diff_lbl.add_theme_color_override("font_color", tier_col)
 		vbox.add_child(diff_lbl)
 
@@ -494,7 +579,7 @@ func rebuild_worlds_and_stages() -> void:
 
 		var play_stage_btn := Button.new()
 		play_stage_btn.custom_minimum_size = Vector2(190, 48)
-		play_stage_btn.text = "▶ PLAY STAGE" if lvl_unlocked else "🔒 LOCKED"
+		play_stage_btn.text = GameState.tr_text("▶ PLAY STAGE", "▶ العب المرحلة") if lvl_unlocked else GameState.tr_text("🔒 LOCKED", "🔒 مغلقة")
 		play_stage_btn.disabled = not lvl_unlocked
 		if lvl_unlocked:
 			CVB.style_button(play_stage_btn, Color(1.0, 0.68, 0.04), Color(1.0, 0.94, 0.52), Color.WHITE, 16, 14, 3)
@@ -513,63 +598,57 @@ func rebuild_worlds_and_stages() -> void:
 func rebuild_characters_tab() -> void:
 	for child in stage_grid.get_children():
 		child.queue_free()
-	world_rules_label.text = "Tap any Hero Card to preview their 3D model live on the Pedestal above, or unlock with Coins!"
+	world_rules_label.text = GameState.tr_text(
+		"3 Exclusive Heroes (Ahmed • Salma • Little Ahmed) — All Unlocked & Ready for Battle!",
+		"الأبطال الثلاثة الحصريون (البطل أحمد • البطلة سلمى • أحمد الصغير) — اختر بطلك المفضل!"
+	)
 	world_rules_label.modulate = Color(1.0, 0.88, 0.32)
 
 	for s_def in GameState.SKIN_CATALOG:
 		var sid: int = int(s_def["id"])
-		var unlocked: bool = GameState.unlocked_skins.has(sid)
 		var selected: bool = (GameState.selected_skin_id == sid)
-		var is_previewing: bool = (preview_skin_id == sid)
-		var price: int = int(s_def["price"])
 		var prim_col: Color = s_def["primary"]
 
 		var card_panel := PanelContainer.new()
-		card_panel.custom_minimum_size = Vector2(196, 212)
-		var border_col: Color = Color(0.25, 1.0, 0.55) if selected else (Color(0.0, 0.90, 1.0) if is_previewing else (Color(1.0, 0.82, 0.18) if unlocked else prim_col))
-		card_panel.add_theme_stylebox_override("panel", CVB.make_box_style(prim_col.darkened(0.45), border_col, 18, 3, 6))
+		card_panel.custom_minimum_size = Vector2(310, 232)
+		var border_col: Color = Color(0.25, 1.0, 0.55) if selected else Color(1.0, 0.84, 0.22)
+		card_panel.add_theme_stylebox_override("panel", CVB.make_box_style(prim_col.darkened(0.46), border_col, 20, 4 if selected else 3, 8))
 
 		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 5)
+		vbox.add_theme_constant_override("separation", 6)
 		card_panel.add_child(vbox)
 
 		var portrait := TextureRect.new()
 		portrait.texture = _get_skin_portrait_tex(sid)
-		portrait.custom_minimum_size = Vector2(82, 82)
+		portrait.custom_minimum_size = Vector2(88, 88)
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		vbox.add_child(portrait)
 
 		var name_lbl := Label.new()
-		name_lbl.text = "%s\n[%s]" % [str(s_def["name"]), str(s_def["rarity"])]
+		var disp_name: String = GameState.get_skin_display_name(sid)
+		var role_str: String = str(s_def.get("rarity_ar", s_def["rarity"])) if GameState.is_arabic() else str(s_def["rarity"])
+		var desc_str: String = str(s_def.get("desc_ar", "")) if GameState.is_arabic() else str(s_def.get("desc", ""))
+		name_lbl.text = "%s  [%s]\n%s" % [disp_name, role_str, desc_str]
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_lbl.add_theme_font_size_override("font_size", 14)
 		name_lbl.add_theme_color_override("font_color", Color.WHITE)
 		vbox.add_child(name_lbl)
 
 		var action_btn := Button.new()
-		action_btn.custom_minimum_size = Vector2(168, 44)
+		action_btn.custom_minimum_size = Vector2(250, 48)
 		if selected:
-			action_btn.text = "✅ EQUIPPED"
-			CVB.style_button(action_btn, Color(0.12, 0.62, 0.34), Color(0.55, 1.0, 0.72), Color.WHITE, 15, 12, 2)
-		elif unlocked:
-			action_btn.text = "👑 EQUIP HERO"
-			CVB.style_button(action_btn, Color(0.14, 0.44, 0.88), Color(1.0, 0.84, 0.22), Color.WHITE, 15, 12, 2)
+			action_btn.text = GameState.tr_text("✅ SELECTED HERO", "✅ البطل المختار حالياً")
+			CVB.style_button(action_btn, Color(0.12, 0.65, 0.36), Color(0.55, 1.0, 0.72), Color.WHITE, 16, 14, 3)
 		else:
-			action_btn.text = "👁 PREVIEW / 🪙 %d" % price
-			CVB.style_button(action_btn, Color(0.85, 0.52, 0.06), Color(1.0, 0.88, 0.38), Color.WHITE, 14, 12, 2)
+			action_btn.text = GameState.tr_text("👑 PLAY AS %s" % disp_name.to_upper(), "👑 اختر %s" % disp_name)
+			CVB.style_button(action_btn, Color(1.0, 0.68, 0.04), Color(1.0, 0.92, 0.48), Color.WHITE, 16, 14, 3)
 
 		var captured_sid: int = sid
-		var captured_price: int = price
 		action_btn.pressed.connect(func():
+			AudioSynth.play_sfx("victory" if GameState.selected_skin_id != captured_sid else "click")
+			GameState.select_skin(captured_sid)
 			_rebuild_hero_character(captured_sid)
-			if GameState.unlocked_skins.has(captured_sid):
-				AudioSynth.play_sfx("click")
-				GameState.select_skin(captured_sid)
-			elif GameState.unlock_skin(captured_sid, captured_price):
-				AudioSynth.play_sfx("victory")
-			else:
-				AudioSynth.play_sfx("click")
 			refresh_header()
 			rebuild_characters_tab()
 		)
@@ -579,12 +658,14 @@ func rebuild_characters_tab() -> void:
 func rebuild_missions_tab() -> void:
 	for child in stage_grid.get_children():
 		child.queue_free()
-	world_rules_label.text = "Complete Mythoria Events & Daily Challenges to earn Golden Rewards & Coins!"
+	world_rules_label.text = GameState.tr_text(
+		"Complete Mythoria Events & Daily Challenges to earn Golden Rewards & Coins!",
+		"أكمل مهام وأحداث ميثوريا اليومية لربح العملات الذهبية والمكافآت الملكية!"
+	)
 	world_rules_label.modulate = Color(0.45, 0.94, 1.0)
 
-	# Daily Royal Treasure Chest Illustrated Event Card
 	var gift_panel := PanelContainer.new()
-	gift_panel.custom_minimum_size = Vector2(258, 300)
+	gift_panel.custom_minimum_size = Vector2(252, 300)
 	gift_panel.add_theme_stylebox_override("panel", CVB.make_box_style(Color(0.46, 0.10, 0.28, 0.96), Color(1.0, 0.84, 0.22), 20, 3, 8))
 	var g_vbox := VBoxContainer.new()
 	g_vbox.add_theme_constant_override("separation", 8)
@@ -592,20 +673,20 @@ func rebuild_missions_tab() -> void:
 
 	var g_banner := TextureRect.new()
 	g_banner.texture = _get_event_art_tex("chest")
-	g_banner.custom_minimum_size = Vector2(230, 130)
+	g_banner.custom_minimum_size = Vector2(226, 128)
 	g_banner.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	g_banner.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	g_vbox.add_child(g_banner)
 
 	var g_lbl := Label.new()
-	g_lbl.text = "🎁 DAILY ROYAL CHEST\nInstant +150 Mythoria Coins"
+	g_lbl.text = GameState.tr_text("🎁 DAILY ROYAL CHEST\nInstant +150 Mythoria Coins", "🎁 الصندوق الملكي اليومي\nمكافأة فورية +150 عملة")
 	g_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	g_lbl.add_theme_font_size_override("font_size", 16)
+	g_lbl.add_theme_font_size_override("font_size", 15)
 	g_vbox.add_child(g_lbl)
 
 	var gift_btn := Button.new()
-	gift_btn.custom_minimum_size = Vector2(218, 52)
-	gift_btn.text = "✅ CLAIMED TODAY" if GameState.daily_gift_claimed else "🎁 CLAIM +150 🪙"
+	gift_btn.custom_minimum_size = Vector2(214, 50)
+	gift_btn.text = GameState.tr_text("✅ CLAIMED TODAY", "✅ تم الاستلام اليوم") if GameState.daily_gift_claimed else GameState.tr_text("🎁 CLAIM +150 🪙", "🎁 استلم +150 🪙")
 	gift_btn.disabled = GameState.daily_gift_claimed
 	CVB.style_button(gift_btn, Color(1.0, 0.68, 0.04), Color(1.0, 0.94, 0.52), Color.WHITE, 16, 14, 3)
 	gift_btn.pressed.connect(func():
@@ -618,9 +699,54 @@ func rebuild_missions_tab() -> void:
 	stage_grid.add_child(gift_panel)
 
 	var missions := [
-		{"id": 0, "title": "🏁 OLYMPUS CUP EVENT\nReach Finish Line (3 Runs)", "cur": GameState.mission_runs_completed, "target": 3, "reward": 120, "art": "missions"},
-		{"id": 1, "title": "🪙 GOLDEN RUSH EVENT\nCollect 50 Mythoria Coins", "cur": GameState.mission_coins_collected, "target": 50, "reward": 150, "art": "coins"},
-		{"id": 2, "title": "⚡ ZEUS SPEED TRIAL\nClear Any Stage Goal Time", "cur": GameState.mission_perfect_runs, "target": 1, "reward": 200, "art": "speed"}
+		{
+			"id": 0,
+			"title": GameState.tr_text("🏁 OLYMPUS CUP EVENT\nReach Finish Line (3 Runs)", "🏁 كأس الأولمب\nأنهِ خط النهاية 3 مرات"),
+			"cur": GameState.mission_runs_completed,
+			"target": 3,
+			"reward": 120,
+			"art": "missions"
+		},
+		{
+			"id": 1,
+			"title": GameState.tr_text("🪙 GOLDEN RUSH EVENT\nCollect 50 Mythoria Coins", "🪙 حمى الذهب\nاجمع 50 عملة ذهبية"),
+			"cur": GameState.mission_coins_collected,
+			"target": 50,
+			"reward": 150,
+			"art": "coins"
+		},
+		{
+			"id": 2,
+			"title": GameState.tr_text("⚡ ZEUS SPEED TRIAL\nClear Any Stage Goal Time", "⚡ تحدي سرعة زيوس\nفُز بأي مرحلة ضمن الوقت"),
+			"cur": GameState.mission_perfect_runs,
+			"target": 1,
+			"reward": 200,
+			"art": "speed"
+		},
+		{
+			"id": 3,
+			"title": GameState.tr_text("🦅 SKY JUMPER CHALLENGE\nPerform 25 Hero Jumps", "🦅 تحدي القفز السماوي\nاقفز 25 قفزة في المراحل"),
+			"cur": GameState.mission_jumps_done,
+			"target": 25,
+			"reward": 140,
+			"art": "heroes"
+		},
+		{
+			"id": 4,
+			"title": GameState.tr_text("🏛 SANCTUARY EXPLORER\nActivate 8 Checkpoints", "🏛 مستكشف المعابد\nفعّل 8 بوابات حفظ Checkpoint"),
+			"cur": GameState.mission_checkpoints_hit,
+			"target": 8,
+			"reward": 180,
+			"art": "trail"
+		},
+		{
+			"id": 5,
+			"title": GameState.tr_text("★ OLYMPUS STAR MASTER\nEarn 10 Stage Stars", "★ سيد نجوم الأولمب\nاحصل على 10 نجوم في المراحل"),
+			"cur": GameState.get_total_stars(),
+			"target": 10,
+			"reward": 250,
+			"art": "missions"
+		}
 	]
 	for m in missions:
 		var mid: int = int(m["id"])
@@ -632,7 +758,7 @@ func rebuild_missions_tab() -> void:
 		var ready_to_claim: bool = (cur >= target) and not claimed
 
 		var m_panel := PanelContainer.new()
-		m_panel.custom_minimum_size = Vector2(256, 300)
+		m_panel.custom_minimum_size = Vector2(252, 300)
 		var border_c: Color = Color(0.25, 1.0, 0.58) if ready_to_claim else Color(1.0, 0.82, 0.18)
 		m_panel.add_theme_stylebox_override("panel", CVB.make_box_style(Color(0.08, 0.22, 0.50, 0.96), border_c, 20, 3, 6))
 
@@ -642,20 +768,32 @@ func rebuild_missions_tab() -> void:
 
 		var m_thumb := TextureRect.new()
 		m_thumb.texture = _get_event_art_tex(art_key)
-		m_thumb.custom_minimum_size = Vector2(228, 130)
+		m_thumb.custom_minimum_size = Vector2(226, 128)
 		m_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		m_thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		m_vbox.add_child(m_thumb)
 
 		var m_lbl := Label.new()
-		m_lbl.text = "%s\nProgress: %d / %d  •  +%d 🪙" % [str(m["title"]), min(cur, target), target, reward]
+		m_lbl.text = "%s\n%s: %d / %d  •  +%d 🪙" % [
+			str(m["title"]),
+			GameState.tr_text("Progress", "التقدم"),
+			min(cur, target),
+			target,
+			reward
+		]
 		m_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		m_lbl.add_theme_font_size_override("font_size", 14)
 		m_vbox.add_child(m_lbl)
 
 		var claim_btn := Button.new()
-		claim_btn.custom_minimum_size = Vector2(216, 50)
-		var state_txt: String = "✅ CLAIMED" if claimed else (("CLAIM +%d 🪙" % reward) if ready_to_claim else ("PROGRESS (%d/%d)" % [min(cur, target), target]))
+		claim_btn.custom_minimum_size = Vector2(214, 50)
+		var state_txt: String = ""
+		if claimed:
+			state_txt = GameState.tr_text("✅ CLAIMED", "✅ تم الاستلام")
+		elif ready_to_claim:
+			state_txt = GameState.tr_text("CLAIM +%d 🪙" % reward, "استلم +%d 🪙" % reward)
+		else:
+			state_txt = GameState.tr_text("PROGRESS (%d/%d)" % [min(cur, target), target], "التقدم (%d/%d)" % [min(cur, target), target])
 		claim_btn.text = state_txt
 		claim_btn.disabled = not ready_to_claim
 		CVB.style_button(claim_btn, Color(0.14, 0.68, 0.36) if ready_to_claim else Color(0.12, 0.28, 0.58), border_c, Color.WHITE, 15, 14, 3)
@@ -671,13 +809,16 @@ func rebuild_missions_tab() -> void:
 func rebuild_shop_tab() -> void:
 	for child in stage_grid.get_children():
 		child.queue_free()
-	world_rules_label.text = "Upgrade your Mythoria powers and unlock lightning abilities & golden trails!"
+	world_rules_label.text = GameState.tr_text(
+		"Upgrade your Mythoria powers and unlock lightning abilities & golden trails!",
+		"طوّر قدرات أبطالك في ميثوريا وافتح اندفاع البرق والمسارات الذهبية!"
+	)
 	world_rules_label.modulate = Color(1.0, 0.85, 0.25)
 
 	var shop_items := [
 		{
-			"title": "⚡ ZEUS DASH BOOST",
-			"desc": "Unlock Mid-Air Lightning Burst\nfor fast obstacle dodges!",
+			"title": GameState.tr_text("⚡ ZEUS DASH BOOST", "⚡ اندفاع برق زيوس (DASH)"),
+			"desc": GameState.tr_text("Unlock Mid-Air Lightning Burst\nfor fast obstacle dodges!", "افتح قدرة الاندفاع الهوائي السريع\nلتجاوز العقبات الصعبة!"),
 			"art": _get_event_art_tex("speed"),
 			"owned": GameState.dash_unlocked,
 			"price": 150,
@@ -686,8 +827,8 @@ func rebuild_shop_tab() -> void:
 			"key": "dash"
 		},
 		{
-			"title": "✨ GOLDEN COMET TRAIL",
-			"desc": "Leave a sparkling Mythoria\nstardust trail behind you!",
+			"title": GameState.tr_text("✨ GOLDEN COMET TRAIL", "✨ مسار المذنب الذهبي"),
+			"desc": GameState.tr_text("Leave a sparkling Mythoria\nstardust trail behind you!", "اترك مساراً ذهبياً متألقاً\nخلف بطلك أثناء الجري والقفز!"),
 			"art": _get_event_art_tex("trail"),
 			"owned": GameState.unlocked_trails.size() > 1,
 			"price": 200,
@@ -696,8 +837,8 @@ func rebuild_shop_tab() -> void:
 			"key": "trail"
 		},
 		{
-			"title": "👑 HERO BUNDLE BONUS",
-			"desc": "Jump directly to the 3D Hero\nWardrobe & unlock 15 skins!",
+			"title": GameState.tr_text("👑 3 HEROES: SALMA & AHMED", "👑 الأبطال الثلاثة: سلمى وأحمد"),
+			"desc": GameState.tr_text("Switch between Ahmed, Salma\nand Little Ahmed anytime!", "بدّل بين البطل أحمد والبطلة سلمى\nوأحمد الصغير مجاناً في أي وقت!"),
 			"art": _get_event_art_tex("heroes"),
 			"owned": false,
 			"price": 0,
@@ -735,14 +876,14 @@ func rebuild_shop_tab() -> void:
 		var is_owned: bool = bool(item["owned"])
 		var price: int = int(item["price"])
 		if item_key == "wardrobe":
-			buy_btn.text = "👑 OPEN HERO WARDROBE"
+			buy_btn.text = GameState.tr_text("👑 CHOOSE HERO", "👑 اختر البطل")
 			CVB.style_button(buy_btn, Color(1.0, 0.68, 0.04), Color(1.0, 0.94, 0.52), Color.WHITE, 16, 14, 3)
 			buy_btn.pressed.connect(func():
 				AudioSynth.play_sfx("click")
 				_open_drawer("CHARACTERS")
 			)
 		else:
-			buy_btn.text = "✅ UNLOCKED" if is_owned else ("BUY (🪙 %d COINS)" % price)
+			buy_btn.text = GameState.tr_text("✅ UNLOCKED", "✅ مفتوح") if is_owned else GameState.tr_text("BUY (🪙 %d COINS)" % price, "شراء (🪙 %d عملة)" % price)
 			buy_btn.disabled = is_owned
 			CVB.style_button(buy_btn, Color(0.14, 0.68, 0.36) if is_owned else Color(1.0, 0.68, 0.04), item["border"], Color.WHITE, 16, 14, 3)
 			buy_btn.pressed.connect(func():
@@ -768,28 +909,41 @@ func rebuild_shop_tab() -> void:
 func rebuild_settings_tab() -> void:
 	for child in stage_grid.get_children():
 		child.queue_free()
-	world_rules_label.text = "Configure audio, 3D graphics quality (LOW / MEDIUM / HIGH), and language (EN / AR)."
+	world_rules_label.text = GameState.tr_text(
+		"Configure Background Music, Sound Effects, 3D Graphics Quality, and Language (Arabic / English).",
+		"تحكم بالموسيقى الخلفية، والمؤثرات الصوتية، وجودة الجرافيك 3D، واللغة (العربية / الإنجليزية)."
+	)
 	world_rules_label.modulate = Color(0.65, 0.92, 1.0)
 
-	var q_names := ["LOW", "MEDIUM", "HIGH"]
+	var q_names_en := ["LOW", "MEDIUM", "HIGH"]
+	var q_names_ar := ["منخفضة", "متوسطة", "عالية جداً"]
+	var q_label: String = q_names_ar[GameState.graphics_quality % 3] if GameState.is_arabic() else q_names_en[GameState.graphics_quality % 3]
+
 	var settings_cards := [
 		{
-			"title": "🔊 SOUND EFFECTS",
-			"val": "ON" if GameState.sound_enabled else "OFF",
+			"title": GameState.tr_text("🎵 BACKGROUND MUSIC", "🎵 الموسيقى الخلفية"),
+			"val": GameState.tr_text("ON" if GameState.music_enabled else "OFF", "مفعّلة" if GameState.music_enabled else "متوقفة"),
+			"art": _get_world_banner_tex(1),
+			"border": Color(1.0, 0.78, 0.24),
+			"key": "bgm"
+		},
+		{
+			"title": GameState.tr_text("🔊 SOUND EFFECTS", "🔊 المؤثرات الصوتية"),
+			"val": GameState.tr_text("ON" if GameState.sound_enabled else "OFF", "مفعّلة" if GameState.sound_enabled else "متوقفة"),
 			"art": _get_world_banner_tex(2),
 			"border": Color(0.45, 0.88, 1.0),
 			"key": "sfx"
 		},
 		{
-			"title": "✨ 3D GRAPHICS QUALITY",
-			"val": q_names[GameState.graphics_quality % 3],
+			"title": GameState.tr_text("✨ 3D GRAPHICS QUALITY", "✨ جودة الجرافيك 3D"),
+			"val": q_label,
 			"art": _get_world_banner_tex(4),
 			"border": Color(1.0, 0.84, 0.22),
 			"key": "gfx"
 		},
 		{
 			"title": "🌐 LANGUAGE / اللغة",
-			"val": "العربية (AR)" if GameState.language_code == "ar" else "English (EN)",
+			"val": "العربية (AR)" if GameState.is_arabic() else "English (EN)",
 			"art": _get_world_banner_tex(7),
 			"border": Color(0.35, 0.96, 0.72),
 			"key": "lang"
@@ -798,7 +952,7 @@ func rebuild_settings_tab() -> void:
 
 	for sc in settings_cards:
 		var card := PanelContainer.new()
-		card.custom_minimum_size = Vector2(262, 280)
+		card.custom_minimum_size = Vector2(246, 280)
 		card.add_theme_stylebox_override("panel", CVB.make_box_style(Color(0.08, 0.20, 0.46, 0.96), sc["border"], 20, 3, 6))
 		var vb := VBoxContainer.new()
 		vb.add_theme_constant_override("separation", 10)
@@ -806,7 +960,7 @@ func rebuild_settings_tab() -> void:
 
 		var thumb := TextureRect.new()
 		thumb.texture = sc["art"]
-		thumb.custom_minimum_size = Vector2(234, 122)
+		thumb.custom_minimum_size = Vector2(220, 120)
 		thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		vb.add_child(thumb)
@@ -814,27 +968,40 @@ func rebuild_settings_tab() -> void:
 		var lbl := Label.new()
 		lbl.text = str(sc["title"])
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.add_theme_font_size_override("font_size", 17)
+		lbl.add_theme_font_size_override("font_size", 16)
 		vb.add_child(lbl)
 
 		var toggle_btn := Button.new()
-		toggle_btn.custom_minimum_size = Vector2(220, 52)
+		toggle_btn.custom_minimum_size = Vector2(210, 50)
 		toggle_btn.text = str(sc["val"])
-		CVB.style_button(toggle_btn, Color(0.14, 0.40, 0.82), sc["border"], Color.WHITE, 18, 14, 3)
+		CVB.style_button(toggle_btn, Color(0.14, 0.40, 0.82), sc["border"], Color.WHITE, 17, 14, 3)
 		var skey: String = str(sc["key"])
 		toggle_btn.pressed.connect(func():
-			AudioSynth.play_sfx("click")
-			if skey == "sfx":
+			if skey == "bgm":
+				GameState.music_enabled = not GameState.music_enabled
+				if not GameState.music_enabled and is_instance_valid(AudioSynth.bgm_player):
+					AudioSynth.bgm_player.stop()
+			elif skey == "sfx":
 				GameState.sound_enabled = not GameState.sound_enabled
 			elif skey == "gfx":
 				GameState.graphics_quality = (GameState.graphics_quality + 1) % 3
 			elif skey == "lang":
-				GameState.language_code = "en" if GameState.language_code == "ar" else "ar"
+				GameState.language_code = "en" if GameState.is_arabic() else "ar"
+			AudioSynth.play_sfx("click")
 			GameState.save_progress()
-			rebuild_settings_tab()
+			refresh_header()
+			_open_drawer("SETTINGS")
 		)
 		vb.add_child(toggle_btn)
 		stage_grid.add_child(card)
+
+func _on_lang_button_pressed() -> void:
+	GameState.language_code = "en" if GameState.is_arabic() else "ar"
+	GameState.save_progress()
+	AudioSynth.play_sfx("click")
+	refresh_header()
+	if drawer_modal.visible:
+		_open_drawer(current_tab)
 
 func _on_play_button_pressed() -> void:
 	AudioSynth.play_sfx("click")
@@ -851,8 +1018,7 @@ func _on_prev_skin_pressed() -> void:
 	AudioSynth.play_sfx("click")
 	var total_skins: int = GameState.SKIN_CATALOG.size()
 	preview_skin_id = (preview_skin_id - 1 + total_skins) % total_skins
-	if GameState.unlocked_skins.has(preview_skin_id):
-		GameState.select_skin(preview_skin_id)
+	GameState.select_skin(preview_skin_id)
 	_rebuild_hero_character(preview_skin_id)
 	refresh_header()
 
@@ -860,8 +1026,7 @@ func _on_next_skin_pressed() -> void:
 	AudioSynth.play_sfx("click")
 	var total_skins: int = GameState.SKIN_CATALOG.size()
 	preview_skin_id = (preview_skin_id + 1) % total_skins
-	if GameState.unlocked_skins.has(preview_skin_id):
-		GameState.select_skin(preview_skin_id)
+	GameState.select_skin(preview_skin_id)
 	_rebuild_hero_character(preview_skin_id)
 	refresh_header()
 

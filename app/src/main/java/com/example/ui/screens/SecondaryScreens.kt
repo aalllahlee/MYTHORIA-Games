@@ -90,6 +90,11 @@ fun SettingsScreen(
                     }
                 }
                 item {
+                    SettingToggleCard(strings.audioMuted, profile.audioMuted) { v ->
+                        onUpdateProfile { it.copy(audioMuted = v) }
+                    }
+                }
+                item {
                     SettingSliderCard(strings.musicVolume, profile.musicVolume, 0f..1f) { v ->
                         onUpdateProfile { it.copy(musicVolume = v) }
                     }
@@ -97,6 +102,11 @@ fun SettingsScreen(
                 item {
                     SettingSliderCard(strings.sfxVolume, profile.sfxVolume, 0f..1f) { v ->
                         onUpdateProfile { it.copy(sfxVolume = v) }
+                    }
+                }
+                item {
+                    SettingSliderCard(strings.uiVolume, profile.uiVolume, 0f..1f) { v ->
+                        onUpdateProfile { it.copy(uiVolume = v) }
                     }
                 }
                 item {
@@ -112,6 +122,11 @@ fun SettingsScreen(
                 item {
                     SettingSliderCard(strings.controlSize, profile.controlSize, 0.8f..1.3f) { v ->
                         onUpdateProfile { it.copy(controlSize = v) }
+                    }
+                }
+                item {
+                    SettingToggleCard(strings.cameraShake, profile.cameraShakeEnabled) { v ->
+                        onUpdateProfile { it.copy(cameraShakeEnabled = v) }
                     }
                 }
                 item {

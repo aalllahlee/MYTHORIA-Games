@@ -30,6 +30,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.db.LevelProgressEntity
 import com.example.data.db.WorldProgressEntity
 import com.example.game.model.*
+import com.example.ui.components.ArcadeButtonArtwork
+import com.example.ui.components.ChestTierBadgeArtwork
+import com.example.ui.components.MenuButtonArtType
+import com.example.ui.components.WorldDioramaBanner
 import com.example.ui.theme.*
 
 @Composable
@@ -37,6 +41,7 @@ fun LevelSelectScreen(
     levelsProgress: List<LevelProgressEntity>,
     worldsProgress: List<WorldProgressEntity>,
     strings: LocalizedStrings,
+    language: AppLanguage = AppLanguage.EN,
     onPlayLevel: (Int, GameMode) -> Unit,
     onBack: () -> Unit
 ) {
@@ -73,7 +78,7 @@ fun LevelSelectScreen(
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .testTag("level_select_screen")
     ) {
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // Header + Mode Selector (Career / Time Attack / AI Rival Race)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -87,9 +92,10 @@ fun LevelSelectScreen(
                             .size(48.dp)
                             .clip(CircleShape)
                             .background(SurfaceCardDark)
+                            .border(1.5.dp, ChampionGold, CircleShape)
                             .testTag("levels_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = ChampionGold)
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
@@ -122,7 +128,7 @@ fun LevelSelectScreen(
                 }
             }
 
-            // World Progression Graph (10 World Nodes + Directed Gateway Goal Edges)
+            // World Progression Graph (10 Rich Illustrated World Diorama Cards + Directed Gateway Goal Edges)
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(0.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -134,77 +140,114 @@ fun LevelSelectScreen(
                     val startNum = (w.id - 1) * 5 + 1
                     val worldStars = (startNum..(startNum + 4)).sumOf { progressMap[it]?.stars ?: 0 }
                     val topCol = Color(w.skyTop.r, w.skyTop.g, w.skyTop.b)
+                    val bottomCol = Color(w.skyBottom.r, w.skyBottom.g, w.skyBottom.b)
                     val primaryCol = Color(w.platformPrimary.r, w.platformPrimary.g, w.platformPrimary.b)
+                    val accentCol = Color(w.platformAccent.r, w.platformAccent.g, w.platformAccent.b)
                     val unlockEdge = WorldProgressionGraph.getUnlockEdgeForWorld(w.id)
 
                     Surface(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = Color.Transparent,
                         modifier = Modifier
-                            .width(164.dp)
-                            .height(112.dp)
+                            .width(178.dp)
+                            .height(118.dp)
                             .border(
-                                width = if (active) 2.5.dp else 1.5.dp,
+                                width = if (active) 2.8.dp else 1.6.dp,
                                 color = when {
                                     active -> ChampionGold
                                     unlocked -> primaryCol
                                     else -> Color(0x44FFFFFF)
                                 },
-                                shape = RoundedCornerShape(18.dp)
+                                shape = RoundedCornerShape(20.dp)
                             )
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Brush.verticalGradient(listOf(topCol, RoyalNavyDeep)))
+                            .clip(RoundedCornerShape(20.dp))
                             .clickable { selectedWorldId = w.id }
                             .testTag("world_card_${w.id}")
                     ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-                            Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        "W${w.id} (${startNum}-${startNum + 4})",
-                                        fontFamily = FredokaFontFamily,
-                                        fontSize = 12.sp,
-                                        color = ChampionGold
-                                    )
-                                    if (!unlocked) {
-                                        Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = TextMuted, modifier = Modifier.size(16.dp))
-                                    } else if (worldProgressMap[w.id]?.gatewayGoalMet == true || goalMetByLevel[w.id * 5] == true) {
-                                        Icon(Icons.Filled.CheckCircle, contentDescription = "Gateway Cleared", tint = IslandMint, modifier = Modifier.size(16.dp))
-                                    }
-                                }
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Full Panoramic Illustrated Diorama of the World
+                            WorldDioramaBanner(
+                                worldId = w.id,
+                                skyTop = topCol,
+                                skyBottom = bottomCol,
+                                primaryCol = primaryCol,
+                                accentCol = accentCol,
+                                unlocked = unlocked,
+                                modifier = Modifier.fillMaxSize()
+                            )
 
-                                Text(
-                                    w.name,
-                                    fontFamily = FredokaFontFamily,
-                                    fontSize = 13.sp,
-                                    color = if (unlocked) Color.White else TextMuted,
-                                    maxLines = 1
-                                )
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color(0x8807102E), RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Filled.Star, contentDescription = null, tint = StarYellow, modifier = Modifier.size(14.dp))
-                                        Spacer(Modifier.width(3.dp))
-                                        Text("$worldStars / 15", fontFamily = FredokaFontFamily, fontSize = 11.sp, color = Color.White)
-                                    }
-                                    if (!unlocked && unlockEdge != null) {
-                                        Text(
-                                            "Lv.${unlockEdge.viaGatewayLevel}≤${unlockEdge.goal.targetTimeSec.toInt()}s",
-                                            fontSize = 10.sp,
-                                            color = ChampionGold,
-                                            fontWeight = FontWeight.Bold
+                            // Subtle readability gradient overlay at top and bottom
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xAA060D24),
+                                                Color(0x22060D24),
+                                                Color(0xDD060D24)
+                                            )
                                         )
+                                    )
+                                    .padding(9.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xCC09122C),
+                                            modifier = Modifier.border(1.dp, ChampionGold.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                                        ) {
+                                            Text(
+                                                "W${w.id} (${startNum}-${startNum + 4})",
+                                                fontFamily = FredokaFontFamily,
+                                                fontSize = 11.sp,
+                                                color = ChampionGold,
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        if (!unlocked) {
+                                            Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = TextMuted, modifier = Modifier.size(16.dp))
+                                        } else if (worldProgressMap[w.id]?.gatewayGoalMet == true || goalMetByLevel[w.id * 5] == true) {
+                                            Icon(Icons.Filled.CheckCircle, contentDescription = "Gateway Cleared", tint = IslandMint, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(
+                                            w.name,
+                                            fontFamily = FredokaFontFamily,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (unlocked) Color.White else TextMuted,
+                                            maxLines = 1
+                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color(0xBB07102E), RoundedCornerShape(10.dp))
+                                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Filled.Star, contentDescription = null, tint = StarYellow, modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("$worldStars / 15", fontFamily = FredokaFontFamily, fontSize = 11.sp, color = Color.White)
+                                            }
+                                            if (!unlocked && unlockEdge != null) {
+                                                Text(
+                                                    "Lv.${unlockEdge.viaGatewayLevel}≤${unlockEdge.goal.targetTimeSec.toInt()}s",
+                                                    fontSize = 10.sp,
+                                                    color = ChampionGold,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -255,7 +298,7 @@ fun LevelSelectScreen(
                         .testTag("world_locked_banner")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -289,14 +332,17 @@ fun LevelSelectScreen(
                     val goalTimeSec = WorldProgressionGraph.goalTimeSecForLevel(lvl.number).toInt()
                     val isGateway = (lvl.number % 5 == 0) && lvl.number < 50
                     val accent = Color(world.platformAccent.r, world.platformAccent.g, world.platformAccent.b)
+                    val topCol = Color(world.skyTop.r, world.skyTop.g, world.skyTop.b)
+                    val bottomCol = Color(world.skyBottom.r, world.skyBottom.g, world.skyBottom.b)
+                    val primaryCol = Color(world.platformPrimary.r, world.platformPrimary.g, world.platformPrimary.b)
 
                     Surface(
                         shape = RoundedCornerShape(22.dp),
                         color = if (unlocked) SurfaceCardGlass else Color(0x660B1126),
                         modifier = Modifier
-                            .width(204.dp)
-                            .fillMaxHeight(0.92f)
-                            .offset(y = if (sIdx % 2 == 0) (-6).dp else 8.dp)
+                            .width(210.dp)
+                            .fillMaxHeight(0.94f)
+                            .offset(y = if (sIdx % 2 == 0) (-4).dp else 6.dp)
                             .border(
                                 width = if (isGateway && unlocked) 2.5.dp else 2.dp,
                                 color = when {
@@ -313,58 +359,124 @@ fun LevelSelectScreen(
                             .testTag("level_card_${lvl.number}")
                     ) {
                         Column(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            // Top Illustrated World Diorama Preview Header inside each Stage Card
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(62.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Surface(shape = CircleShape, color = if (unlocked) accent else Color(0x44FFFFFF)) {
-                                        Text(
-                                            text = "${lvl.number}",
-                                            fontFamily = FredokaFontFamily,
-                                            fontSize = 15.sp,
-                                            color = RoyalNavyDeep,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 4.dp)
+                                WorldDioramaBanner(
+                                    worldId = world.id,
+                                    skyTop = topCol,
+                                    skyBottom = bottomCol,
+                                    primaryCol = primaryCol,
+                                    accentCol = accent,
+                                    unlocked = unlocked,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(Color(0x6607102E), Color(0xDD09122C))
+                                            )
                                         )
-                                    }
-                                    if (isGateway) {
-                                        Surface(shape = RoundedCornerShape(8.dp), color = ChampionGold) {
-                                            Text(
-                                                text = strings.worldGateBadge,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = RoyalNavyDeep,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = if (unlocked) accent else Color(0x44FFFFFF),
+                                                modifier = Modifier.border(1.5.dp, Color.White, CircleShape)
+                                            ) {
+                                                Text(
+                                                    text = "${lvl.number}",
+                                                    fontFamily = FredokaFontFamily,
+                                                    fontSize = 14.sp,
+                                                    color = RoyalNavyDeep,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            val diffTier = lvl.difficultyTier
+                                            val diffCol = Color(diffTier.colorHex)
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0xCC07102E),
+                                                modifier = Modifier.border(1.dp, diffCol, RoundedCornerShape(6.dp))
+                                            ) {
+                                                Text(
+                                                    text = diffTier.localizedLabel(language),
+                                                    fontFamily = FredokaFontFamily,
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = diffCol,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            if (isGateway) {
+                                                Surface(shape = RoundedCornerShape(8.dp), color = ChampionGold) {
+                                                    Text(
+                                                        text = strings.worldGateBadge,
+                                                        fontSize = 8.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = RoyalNavyDeep,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
                                         }
-                                    }
-                                }
-                                if (!unlocked) {
-                                    Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = TextMuted, modifier = Modifier.size(18.dp))
-                                } else {
-                                    Row {
-                                        for (s in 1..3) {
-                                            Icon(
-                                                Icons.Filled.Star,
-                                                contentDescription = null,
-                                                tint = if (s <= stars) StarYellow else Color(0x33FFFFFF),
-                                                modifier = Modifier.size(16.dp)
-                                            )
+                                        if (!unlocked) {
+                                            Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = TextMuted, modifier = Modifier.size(18.dp))
+                                        } else {
+                                            Row {
+                                                for (s in 1..3) {
+                                                    Icon(
+                                                        Icons.Filled.Star,
+                                                        contentDescription = null,
+                                                        tint = if (s <= stars) StarYellow else Color(0x44FFFFFF),
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
 
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(lvl.title, fontFamily = FredokaFontFamily, fontSize = 15.sp, color = if (unlocked) Color.White else TextMuted, maxLines = 1)
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                val topChestTier = lvl.treasureChests.maxByOrNull { it.bonusCoins }?.tier ?: ChestTier.WOODEN
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        lvl.title,
+                                        fontFamily = FredokaFontFamily,
+                                        fontSize = 13.sp,
+                                        color = if (unlocked) Color.White else TextMuted,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    ChestTierBadgeArtwork(tier = topChestTier, modifier = Modifier.size(20.dp))
+                                }
                                 Text(
                                     text = if (bestMs > 0L) "Best: ${bestMs / 1000}.${(bestMs % 1000) / 10}s" else lvl.subtitle,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     color = TextMuted,
                                     maxLines = 1
                                 )
@@ -383,20 +495,43 @@ fun LevelSelectScreen(
                                         color = if (goalMet) IslandMint else ChampionGold
                                     )
                                 }
+                                Text(
+                                    text = "★1: Clear • ★2: Goal/Secret • ★3: No Fall/3+ Perfect",
+                                    fontSize = 9.sp,
+                                    color = if (stars >= 3) StarYellow else TextSecondary,
+                                    maxLines = 1
+                                )
                             }
 
                             if (unlocked) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (selectedMode == GameMode.RIVAL_RACE) ChampionGold else accent
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                                        .fillMaxWidth()
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                if (selectedMode == GameMode.RIVAL_RACE) {
+                                                    listOf(MythicGoldLight, ChampionGold, ChampionGoldDark)
+                                                } else {
+                                                    listOf(MythicGoldLight, accent, ChampionGold)
+                                                }
+                                            )
+                                        )
+                                        .border(1.5.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = RoyalNavyDeep, modifier = Modifier.size(16.dp))
-                                        Spacer(Modifier.width(4.dp))
+                                        ArcadeButtonArtwork(
+                                            type = MenuButtonArtType.PLAY_CROWN,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
                                         Text(
                                             text = if (selectedMode == GameMode.RIVAL_RACE) strings.rivalRaceMode else strings.play,
                                             fontFamily = FredokaFontFamily,
@@ -406,6 +541,8 @@ fun LevelSelectScreen(
                                         )
                                     }
                                 }
+                            } else {
+                                Spacer(Modifier.height(8.dp))
                             }
                         }
                     }

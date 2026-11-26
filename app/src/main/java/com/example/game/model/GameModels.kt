@@ -30,6 +30,81 @@ enum class ShopCategory {
     ABILITIES
 }
 
+enum class PowerUpType {
+    SHIELD,
+    MAGNET,
+    WINGS
+}
+
+data class PowerUpDef(
+    val x: Float,
+    val y: Float,
+    val z: Float,
+    val type: PowerUpType
+)
+
+enum class ChestTier(
+    val defaultCoins: Int,
+    val titleEn: String,
+    val titleAr: String,
+    val colorHex: Long
+) {
+    WOODEN(35, "Wooden Chest", "صندوق خشبي", 0xFFD97706),
+    METALLIC(60, "Metallic Chest", "صندوق معدني", 0xFF94A3B8),
+    MAGIC_RARE(95, "Magic Rare Chest", "صندوق سحري نادر", 0xFF00E5FF),
+    EVENT_BOSS(135, "Royal Event Chest", "صندوق ملكي للفعالية", 0xFFFFD22B);
+
+    fun localizedTitle(lang: AppLanguage): String =
+        if (lang == AppLanguage.AR) titleAr else titleEn
+}
+
+enum class ItemRarity(
+    val labelEn: String,
+    val labelAr: String,
+    val colorHex: Long
+) {
+    COMMON("COMMON", "شائع", 0xFF94A3B8),
+    RARE("RARE", "نادر", 0xFF00E5FF),
+    EPIC("EPIC", "ملحمي", 0xFFC83BFF),
+    LEGENDARY("LEGENDARY", "أسطوري", 0xFFFFD22B),
+    MYTHIC_EVENT("EVENT LIMITED", "حصري للفعالية", 0xFFFF3B5C);
+
+    fun localizedLabel(lang: AppLanguage): String =
+        if (lang == AppLanguage.AR) labelAr else labelEn
+}
+
+enum class DifficultyTier(
+    val labelEn: String,
+    val labelAr: String,
+    val colorHex: Long
+) {
+    TUTORIAL("TUTORIAL", "تعليمي", 0xFF2EE58D),
+    EASY("EASY", "سهل", 0xFF00E5FF),
+    MEDIUM("MEDIUM", "متوسط", 0xFFFFD22B),
+    HARD("HARD", "صعب", 0xFFFF8C00),
+    EXPERT("EXPERT", "خبير", 0xFFFF3B5C);
+
+    fun localizedLabel(lang: AppLanguage): String =
+        if (lang == AppLanguage.AR) labelAr else labelEn
+}
+
+data class TreasureChestDef(
+    val x: Float,
+    val y: Float,
+    val z: Float,
+    val bonusCoins: Int = 75,
+    val isBossChest: Boolean = false,
+    val tier: ChestTier = if (isBossChest) ChestTier.EVENT_BOSS else ChestTier.WOODEN
+)
+
+data class GhostFrame(
+    val timeSec: Float,
+    val x: Float,
+    val y: Float,
+    val z: Float,
+    val yaw: Float
+)
+
 data class Rgba(val r: Float, val g: Float, val b: Float, val a: Float = 1f) {
     companion object {
         fun fromHex(hex: Long): Rgba {
@@ -68,6 +143,7 @@ enum class PlatformType {
     BOUNCE_PAD,
     NARROW_BRIDGE,
     ELEVATOR,
+    SECRET_PATH,
     FINISH
 }
 
@@ -83,7 +159,8 @@ enum class ObstacleType {
     PUSHER,
     GIANT_SWINGER,
     FIRE_JET,
-    LASER_BEAM
+    LASER_BEAM,
+    FALLING_STALACTITE
 }
 
 data class PlatformDef(
@@ -163,13 +240,27 @@ data class LevelDef(
     val obstacles: List<ObstacleDef>,
     val checkpoints: List<CheckpointDef>,
     val coins: List<CoinDef>,
+    val powerUps: List<PowerUpDef> = emptyList(),
+    val treasureChests: List<TreasureChestDef> = emptyList(),
     val startX: Float = 0f,
     val startY: Float = 1.5f,
     val startZ: Float = 0f,
     val finishZ: Float
-)
+) {
+    val difficultyTier: DifficultyTier
+        get() = when {
+            number <= 5 -> DifficultyTier.TUTORIAL
+            number <= 15 -> DifficultyTier.EASY
+            number <= 30 -> DifficultyTier.MEDIUM
+            number <= 40 -> DifficultyTier.HARD
+            else -> DifficultyTier.EXPERT
+        }
+}
 
 enum class HeadAccessoryStyle {
+    AHMED_ROYAL_WINGED,
+    SALMA_STAR_PRINCESS,
+    KID_AHMED_TURBO,
     SPIKY_HAIR,
     NINJA_HOOD,
     CROWN_HELM,
@@ -208,7 +299,14 @@ data class ShopItemDef(
     val name: String,
     val description: String,
     val costCoins: Int,
-    val previewColor: Rgba
+    val previewColor: Rgba,
+    val rarity: ItemRarity = when {
+        costCoins == 0 -> ItemRarity.COMMON
+        costCoins < 700 -> ItemRarity.RARE
+        costCoins < 1200 -> ItemRarity.EPIC
+        costCoins < 1800 -> ItemRarity.LEGENDARY
+        else -> ItemRarity.MYTHIC_EVENT
+    }
 )
 
 data class AchievementDef(
@@ -346,115 +444,366 @@ object GameCatalog {
         )
     )
 
+    // Strictly 3 characters with ONLY their names and no description text
     val skins: List<SkinDef> = listOf(
-        SkinDef("red_hero", "Young Greek Hero", "Heroic crimson & gold tunic bearing the Mythoria crest.", 0, 1, Rgba.fromHex(0xE62E4D), Rgba.fromHex(0x1E2949), Rgba.fromHex(0xFFCAA8), Rgba.fromHex(0x5C2C16), Rgba.fromHex(0xD97706), Rgba.fromHex(0xFFD22B), HeadAccessoryStyle.SPIKY_HAIR),
-        SkinDef("blue_ninja", "Shadow Warrior", "Stealthy night-temple guardian infused with sapphire energy.", 150, 1, Rgba.fromHex(0x1D3557), Rgba.fromHex(0x111827), Rgba.fromHex(0xFFCAA8), Rgba.fromHex(0x00E5FF), Rgba.fromHex(0x111827), Rgba.fromHex(0x00D4FF), HeadAccessoryStyle.NINJA_HOOD),
-        SkinDef("golden_champ", "Golden Warrior", "Radiant golden plate armor forged in the halls of Olympus.", 350, 3, Rgba.fromHex(0xFFB703), Rgba.fromHex(0x7C4D00), Rgba.fromHex(0xFFD6B0), Rgba.fromHex(0xFFE066), Rgba.fromHex(0xFB8500), Rgba.fromHex(0x00E5FF), HeadAccessoryStyle.CROWN_HELM),
-        SkinDef("panda", "Mythical Explorer", "Cheerful sky-temple explorer who leaps across waterfall islands.", 250, 2, Rgba.fromHex(0x1D7AFC), Rgba.fromHex(0x222634), Rgba.fromHex(0xF8FAFC), Rgba.fromHex(0xFFD22B), Rgba.fromHex(0x1E293B), Rgba.fromHex(0xFFD22B), HeadAccessoryStyle.PANDA_EARS),
-        SkinDef("robot", "Automaton Sentinel", "Ancient bronze & sapphire temple colossus built by Hephaestus.", 400, 4, Rgba.fromHex(0x64748B), Rgba.fromHex(0x334155), Rgba.fromHex(0xCBD5E1), Rgba.fromHex(0x00E5FF), Rgba.fromHex(0x00B4D8), Rgba.fromHex(0x00E5FF), HeadAccessoryStyle.ROBOT_ANTENNA),
-        SkinDef("astronaut", "Starlight Oracle", "Low-gravity astral voyager of the Floating Castles.", 500, 5, Rgba.fromHex(0xF1F5F9), Rgba.fromHex(0xCBD5E1), Rgba.fromHex(0x0F172A), Rgba.fromHex(0xFFD22B), Rgba.fromHex(0x0077FF), Rgba.fromHex(0x00E5FF), HeadAccessoryStyle.ASTRONAUT_HELMET),
-        SkinDef("pirate", "Aegean Corsair", "Fearless sky captain sailing between Ancient Greek Islands.", 450, 5, Rgba.fromHex(0x9B2226), Rgba.fromHex(0x2B2D42), Rgba.fromHex(0xF5C29B), Rgba.fromHex(0xD90429), Rgba.fromHex(0x4A2C16), Rgba.fromHex(0xFFD166), HeadAccessoryStyle.PIRATE_BANDANA),
-        SkinDef("knight", "Ancient Knight", "Stalwart marble-and-silver protector with gleaming royal crest.", 600, 7, Rgba.fromHex(0x94A3B8), Rgba.fromHex(0x475569), Rgba.fromHex(0x334155), Rgba.fromHex(0x00D4FF), Rgba.fromHex(0x64748B), Rgba.fromHex(0xFFD22B), HeadAccessoryStyle.KNIGHT_VISOR),
-        SkinDef("football_star", "Olympian Sprinter", "Hermes-blessed runner with winged footwork.", 300, 2, Rgba.fromHex(0x10B981), Rgba.fromHex(0xFFFFFF), Rgba.fromHex(0xF4BE96), Rgba.fromHex(0xFFD22B), Rgba.fromHex(0x10B981), Rgba.fromHex(0xFFD22B), HeadAccessoryStyle.HEADBAND),
-        SkinDef("ice_warrior", "Thunder Champion", "Storm-forged champion wielding the electric blue fury of Zeus.", 700, 10, Rgba.fromHex(0x00B4D8), Rgba.fromHex(0x03045E), Rgba.fromHex(0xCAF0F8), Rgba.fromHex(0x00E5FF), Rgba.fromHex(0x48CAE4), Rgba.fromHex(0xFFD22B), HeadAccessoryStyle.ICE_HORNS),
-        SkinDef("fire_hero", "Solar Phoenix", "Blazing sacred flame runner fueled by golden temple braziers.", 750, 15, Rgba.fromHex(0xFF4800), Rgba.fromHex(0x370617), Rgba.fromHex(0xFFBA7A), Rgba.fromHex(0xFFAA00), Rgba.fromHex(0xDC2F02), Rgba.fromHex(0xFFE66D), HeadAccessoryStyle.FLAME_CREST),
-        SkinDef("alien", "Portal Mystic", "Arcane guardian from beyond the glowing sapphire gate.", 850, 20, Rgba.fromHex(0x7209B7), Rgba.fromHex(0x3A0CA3), Rgba.fromHex(0x52E588), Rgba.fromHex(0x00F5D4), Rgba.fromHex(0x4CC9F0), Rgba.fromHex(0xF72585), HeadAccessoryStyle.ALIEN_ANTENNAE),
-        SkinDef("royal_king", "Royal Guardian", "Majestic sovereign wearing the 5-peak sapphire-studded Golden Crown.", 1000, 25, Rgba.fromHex(0x1E3A8A), Rgba.fromHex(0x0A122C), Rgba.fromHex(0xFFCAA8), Rgba.fromHex(0xFFD22B), Rgba.fromHex(0xFFD22B), Rgba.fromHex(0x00E5FF), HeadAccessoryStyle.ROYAL_CROWN),
-        SkinDef("shadow_runner", "Obsidian Titan", "Midnight phantom glowing with amethyst & sapphire runes.", 1200, 35, Rgba.fromHex(0x18181B), Rgba.fromHex(0x09090B), Rgba.fromHex(0x27272A), Rgba.fromHex(0xC026D3), Rgba.fromHex(0xA21CAF), Rgba.fromHex(0x00E5FF), HeadAccessoryStyle.SHADOW_COWL),
-        SkinDef("mythoria_legend", "Celestial Hero", "Ultimate MYTHORIA games champion with golden wings & sapphire aura.", 1500, 1, Rgba.fromHex(0xFFD22B), Rgba.fromHex(0x0A2463), Rgba.fromHex(0xFFCAA8), Rgba.fromHex(0x00E5FF), Rgba.fromHex(0xFFD22B), Rgba.fromHex(0x00E5FF), HeadAccessoryStyle.LEGEND_HALO)
+        SkinDef(
+            id = "red_hero",
+            name = "Ahmed",
+            description = "",
+            costCoins = 0,
+            unlockLevelReq = 1,
+            hoodieColor = Rgba.fromHex(0xE62E4D),
+            pantsColor = Rgba.fromHex(0x1E2949),
+            skinColor = Rgba.fromHex(0xFFCAA8),
+            hairOrAccentColor = Rgba.fromHex(0x4A2511),
+            shoeColor = Rgba.fromHex(0xFFB703),
+            emblemColor = Rgba.fromHex(0xFFD22B),
+            headStyle = HeadAccessoryStyle.AHMED_ROYAL_WINGED
+        ),
+        SkinDef(
+            id = "salma_heroine",
+            name = "Salma",
+            description = "",
+            costCoins = 0,
+            unlockLevelReq = 1,
+            hoodieColor = Rgba.fromHex(0xFF4785),
+            pantsColor = Rgba.fromHex(0x5A189A),
+            skinColor = Rgba.fromHex(0xFFD6BA),
+            hairOrAccentColor = Rgba.fromHex(0x2D1635),
+            shoeColor = Rgba.fromHex(0xFF85A1),
+            emblemColor = Rgba.fromHex(0xFFD22B),
+            headStyle = HeadAccessoryStyle.SALMA_STAR_PRINCESS
+        ),
+        SkinDef(
+            id = "kid_ahmed",
+            name = "Ahmed",
+            description = "",
+            costCoins = 0,
+            unlockLevelReq = 1,
+            hoodieColor = Rgba.fromHex(0x00B4D8),
+            pantsColor = Rgba.fromHex(0x1D3557),
+            skinColor = Rgba.fromHex(0xFFCAA8),
+            hairOrAccentColor = Rgba.fromHex(0x3B1F0E),
+            shoeColor = Rgba.fromHex(0x10B981),
+            emblemColor = Rgba.fromHex(0x00F5D4),
+            headStyle = HeadAccessoryStyle.KID_AHMED_TURBO
+        )
     )
 
     val shopItems: List<ShopItemDef> = listOf(
         // Abilities
-        ShopItemDef("ability_dash", ShopCategory.ABILITIES, "Thunder Dash", "Unlocks a mid-air & ground lightning Dash button with cooldown.", 200, Rgba.fromHex(0x00D4FF)),
-        // Hats
-        ShopItemDef("hat_none", ShopCategory.HATS, "Default Head", "Use your character's natural hairstyle or helmet.", 0, Rgba.fromHex(0x94A3B8)),
-        ShopItemDef("hat_crown", ShopCategory.HATS, "Mythoria Royal Crown", "Gleaming 5-peak golden crown studded with blue sapphires.", 300, Rgba.fromHex(0xFFD22B)),
-        ShopItemDef("hat_headband", ShopCategory.HATS, "Olympian Laurel Band", "Bold crimson & gold band for temple champions.", 120, Rgba.fromHex(0xFF3B5C)),
-        ShopItemDef("hat_halo", ShopCategory.HATS, "Celestial Halo", "Floating golden solar ring above your head.", 450, Rgba.fromHex(0xFFF05A)),
-        ShopItemDef("hat_visor", ShopCategory.HATS, "Sapphire Visor", "Glowing arcane sapphire crystal visor.", 260, Rgba.fromHex(0x00E5FF)),
-        // Shoes
-        ShopItemDef("shoe_default", ShopCategory.SHOES, "Hero Sandals", "Balanced everyday sky-runner footwear.", 0, Rgba.fromHex(0xFF3B5C)),
-        ShopItemDef("shoe_gold", ShopCategory.SHOES, "Winged Golden Greaves", "Luxurious Hermes-inspired golden winged boots.", 220, Rgba.fromHex(0xFFD22B)),
-        ShopItemDef("shoe_rocket", ShopCategory.SHOES, "Sapphire Storm Boots", "Vibrant electric-blue lightning boots.", 320, Rgba.fromHex(0x00D4FF)),
-        ShopItemDef("shoe_shadow", ShopCategory.SHOES, "Amethyst Greaves", "Sleek obsidian-violet temple runner boots.", 360, Rgba.fromHex(0xC83BFF)),
-        // Trails
-        ShopItemDef("trail_dust", ShopCategory.TRAILS, "Cloud Mist", "Clean soft sky-cloud running puffs.", 0, Rgba.fromHex(0xFFFFFF)),
-        ShopItemDef("trail_gold", ShopCategory.TRAILS, "Mythoria Gold Dust", "Shimmering golden stardust behind every step.", 240, Rgba.fromHex(0xFFD22B)),
-        ShopItemDef("trail_cyan", ShopCategory.TRAILS, "Zeus Lightning", "Electric sapphire lightning streak trail.", 280, Rgba.fromHex(0x00E5FF)),
-        ShopItemDef("trail_flame", ShopCategory.TRAILS, "Brazier Flame", "Sacred golden-orange fire embers while sprinting.", 340, Rgba.fromHex(0xFF5400)),
-        ShopItemDef("trail_rainbow", ShopCategory.TRAILS, "Bifrost Prism", "Mythical celestial prism trail across the sky.", 500, Rgba.fromHex(0xFF5CA8)),
-        // Victory
-        ShopItemDef("victory_dance", ShopCategory.VICTORY, "Heroic Salute", "Cheerful celebratory victory jump & wave.", 0, Rgba.fromHex(0x2EE58D)),
-        ShopItemDef("victory_spin", ShopCategory.VICTORY, "Olympian Spin", "360-degree airborne hero spin salute.", 180, Rgba.fromHex(0xFFD22B)),
-        ShopItemDef("victory_flip", ShopCategory.VICTORY, "Royal Backflip", "Acrobatic victory flip at the temple portal arch.", 350, Rgba.fromHex(0xC83BFF))
+        ShopItemDef("ability_dash", ShopCategory.ABILITIES, "Thunder Dash", "Unlocks a mid-air & ground lightning Dash button with cooldown.", 650, Rgba.fromHex(0x00D4FF), ItemRarity.EPIC),
+        // Hats & Realistic Hoods / Headgear
+        ShopItemDef("hat_none", ShopCategory.HATS, "Default Athletic Hair", "Clean modern athletic runner hairstyle.", 0, Rgba.fromHex(0x94A3B8), ItemRarity.COMMON),
+        ShopItemDef("hat_headband", ShopCategory.HATS, "Crimson Pro Track Hood", "Breathable red & carbon streetwear athletic hood.", 420, Rgba.fromHex(0xFF3B5C), ItemRarity.RARE),
+        ShopItemDef("hat_visor", ShopCategory.HATS, "Sapphire Aero Visor", "High-contrast blue competition running visor & tech hood.", 780, Rgba.fromHex(0x00E5FF), ItemRarity.EPIC),
+        ShopItemDef("hat_crown", ShopCategory.HATS, "Black & Gold Champion Crown", "Championship gold & obsidian crown emblem.", 1150, Rgba.fromHex(0xFFD22B), ItemRarity.LEGENDARY),
+        ShopItemDef("hat_halo", ShopCategory.HATS, "Mythoria Astral Halo", "Limited-edition floating golden solar ring.", 1650, Rgba.fromHex(0xFFF05A), ItemRarity.MYTHIC_EVENT),
+        // Shoes & Realistic Athletic Footwear / Tracksuit Bottom Sets
+        ShopItemDef("shoe_default", ShopCategory.SHOES, "Crimson Street High-Tops", "Red & carbon high-top parkour sneakers with cargo trim.", 0, Rgba.fromHex(0xFF3B5C), ItemRarity.COMMON),
+        ShopItemDef("shoe_rocket", ShopCategory.SHOES, "Cobalt Pro Track Runners", "White & cobalt blue competition marathon sneakers.", 640, Rgba.fromHex(0x00D4FF), ItemRarity.RARE),
+        ShopItemDef("shoe_shadow", ShopCategory.SHOES, "Tactical Olive Trail Boots", "Rugged olive & carbon tactical outdoor running shoes.", 980, Rgba.fromHex(0x4D7C0F), ItemRarity.EPIC),
+        ShopItemDef("shoe_gold", ShopCategory.SHOES, "Black & Gold Apex Sneakers", "Luxury black & metallic gold championship high-tops.", 1450, Rgba.fromHex(0xFFD22B), ItemRarity.LEGENDARY),
+        // Trails & Outfit Auras
+        ShopItemDef("trail_dust", ShopCategory.TRAILS, "Clean Air Slipstream", "Subtle aerodynamic white sprint vapor.", 0, Rgba.fromHex(0xFFFFFF), ItemRarity.COMMON),
+        ShopItemDef("trail_gold", ShopCategory.TRAILS, "Black & Gold Championship Aura", "Gleaming golden carbon sparks behind every stride.", 720, Rgba.fromHex(0xFFD22B), ItemRarity.RARE),
+        ShopItemDef("trail_cyan", ShopCategory.TRAILS, "Cobalt Velocity Streak", "Electric sapphire speed lines for competition runners.", 960, Rgba.fromHex(0x00E5FF), ItemRarity.EPIC),
+        ShopItemDef("trail_flame", ShopCategory.TRAILS, "Crimson Streetwear Blaze", "High-energy crimson & amber thermal sprint trail.", 1280, Rgba.fromHex(0xFF5400), ItemRarity.LEGENDARY),
+        ShopItemDef("trail_rainbow", ShopCategory.TRAILS, "Mythoria Festival Prism", "Limited-edition seasonal championship aura.", 1850, Rgba.fromHex(0xFF5CA8), ItemRarity.MYTHIC_EVENT),
+        // Victory Poses
+        ShopItemDef("victory_dance", ShopCategory.VICTORY, "Athlete Fist Pump", "Confident champion podium salute.", 0, Rgba.fromHex(0x2EE58D), ItemRarity.COMMON),
+        ShopItemDef("victory_spin", ShopCategory.VICTORY, "360° Parkour Cyclone", "Airborne 360-degree freestyle spin landing.", 580, Rgba.fromHex(0xFFD22B), ItemRarity.RARE),
+        ShopItemDef("victory_flip", ShopCategory.VICTORY, "Apex Championship Backflip", "Explosive acrobatic backflip at the finish arch.", 1120, Rgba.fromHex(0xC83BFF), ItemRarity.LEGENDARY)
     )
 
     val achievements: List<AchievementDef> = listOf(
-        AchievementDef("ach_first_win", "First Steps Victory", "Complete your first level in Career Mode.", 1, 100),
-        AchievementDef("ach_world_1", "Island Conqueror", "Complete all 5 levels of World 1.", 5, 250),
-        AchievementDef("ach_coins_500", "Treasure Hunter", "Collect 500 total coins across any modes.", 500, 150),
-        AchievementDef("ach_skins_3", "Style Collector", "Unlock 3 different character skins.", 3, 200),
-        AchievementDef("ach_dash", "Speed Burst", "Unlock the Turbo Dash ability in the Shop.", 1, 100),
-        AchievementDef("ach_endless_100", "Sky Survivor", "Reach 100m distance in Endless Mode.", 100, 250),
-        AchievementDef("ach_daily", "Daily Challenger", "Complete a Daily Challenge run.", 1, 200),
-        AchievementDef("ach_10_wins", "Obstacle Master", "Win 10 total runs across the game.", 10, 400)
+        AchievementDef("ach_first_win", "First Steps Victory", "Complete your first level in Career Mode.", 1, 75),
+        AchievementDef("ach_world_1", "Island Conqueror", "Complete all 5 levels of World 1.", 5, 180),
+        AchievementDef("ach_coins_500", "Treasure Hunter", "Collect 500 total coins across any modes.", 500, 120),
+        AchievementDef("ach_skins_3", "Style Collector", "Unlock 3 different character skins.", 3, 150),
+        AchievementDef("ach_dash", "Speed Burst", "Unlock the Turbo Dash ability in the Shop.", 1, 90),
+        AchievementDef("ach_endless_100", "Sky Survivor", "Reach 100m distance in Endless Mode.", 100, 200),
+        AchievementDef("ach_daily", "Daily Challenger", "Complete a Daily Challenge run.", 1, 150),
+        AchievementDef("ach_10_wins", "Obstacle Master", "Win 10 total runs across the game.", 10, 320)
     )
 
     val missions: List<MissionDef> = listOf(
         MissionDef(
+            id = "mis_speed_90",
+            type = MissionType.SPEED_90S,
+            cadence = MissionCadence.DAILY,
+            titleEn = "Speed Mission: Finish 2 Stages under 90s",
+            titleAr = "مهمة السرعة: أنهِ مرحلتين خلال أقل من 90 ثانية",
+            titleFr = "Vitesse : Terminer 2 niveaux en 90s",
+            target = 2,
+            rewardCoins = 220,
+            rewardXp = 260
+        ),
+        MissionDef(
+            id = "mis_perfect_landings",
+            type = MissionType.PERFECT_LANDINGS,
+            cadence = MissionCadence.DAILY,
+            titleEn = "Precision Mission: Perform 8 Perfect Landings",
+            titleAr = "مهمة الدقة: نفّذ 8 هبوطات مثالية في منتصف المنصة",
+            titleFr = "Précision : Réussir 8 atterrissages parfaits",
+            target = 8,
+            rewardCoins = 260,
+            rewardXp = 300
+        ),
+        MissionDef(
+            id = "mis_no_checkpoint",
+            type = MissionType.NO_CHECKPOINT_WIN,
+            cadence = MissionCadence.DAILY,
+            titleEn = "Zero-Fall Survival: Win 2 Stages without Respawning",
+            titleAr = "مهمة البقاء الاحترافية: فز بمرحلتين دون أي سقوط",
+            titleFr = "Survie : Gagner 2 niveaux sans chute",
+            target = 2,
+            rewardCoins = 340,
+            rewardXp = 380
+        ),
+        MissionDef(
+            id = "mis_secret_path",
+            type = MissionType.FIND_SECRET_PATH,
+            cadence = MissionCadence.DAILY,
+            titleEn = "Explorer Mastery: Discover 2 Secret Side Paths",
+            titleAr = "مهمة الاستكشاف: اعثر على مسارين سريين جانبيين",
+            titleFr = "Exploration : Trouver 2 chemins secrets",
+            target = 2,
+            rewardCoins = 320,
+            rewardXp = 350
+        ),
+        MissionDef(
+            id = "mis_open_chest",
+            type = MissionType.OPEN_CHESTS,
+            cadence = MissionCadence.DAILY,
+            titleEn = "Vault Raider: Open 2 Secret or Boss Treasure Chests",
+            titleAr = "مهمة الكنز: افتح صندوقي كنز سري أو ملكي",
+            titleFr = "Trésor : Ouvrir 2 coffres au trésor",
+            target = 2,
+            rewardCoins = 290,
+            rewardXp = 320
+        ),
+        MissionDef(
+            id = "mis_narrow_bridges",
+            type = MissionType.CROSS_NARROW_BRIDGES,
+            cadence = MissionCadence.DAILY,
+            titleEn = "Balance Master: Cross 5 Narrow Bridges without Falling",
+            titleAr = "مهمة التوازن: اعبر 5 جسور ضيقة دون السقوط",
+            titleFr = "Défi : Traverser 5 ponts étroits sans tomber",
+            target = 5,
+            rewardCoins = 280,
+            rewardXp = 310
+        ),
+        MissionDef(
+            id = "mis_no_dash",
+            type = MissionType.NO_DASH_WIN,
+            cadence = MissionCadence.DAILY,
+            titleEn = "Pure Footwork: Win 2 Stages without Using Dash",
+            titleAr = "مهمة التحكم الخالص: فز بمرحلتين دون استخدام الاندفاع",
+            titleFr = "Avancé : Gagner 2 niveaux sans utiliser le Dash",
+            target = 2,
+            rewardCoins = 360,
+            rewardXp = 400
+        ),
+        MissionDef(
             id = "mis_stages",
             type = MissionType.COMPLETE_STAGES,
-            titleEn = "Complete 3 Stages",
-            titleAr = "أكمل 3 مراحل",
-            titleFr = "Terminer 3 niveaux",
-            target = 3,
-            rewardCoins = 500,
-            rewardXp = 450
+            cadence = MissionCadence.DAILY,
+            titleEn = "Daily Grind: Complete 5 Stages",
+            titleAr = "التحدي اليومي: أكمل 5 مراحل",
+            titleFr = "Terminer 5 niveaux",
+            target = 5,
+            rewardCoins = 280,
+            rewardXp = 320
         ),
         MissionDef(
             id = "mis_coins",
             type = MissionType.COLLECT_COINS,
-            titleEn = "Collect 100 Coins",
-            titleAr = "اجمع 100 عملة",
-            titleFr = "Collecter 100 pièces",
-            target = 100,
-            rewardCoins = 400,
-            rewardXp = 350
+            cadence = MissionCadence.DAILY,
+            titleEn = "Gold Rush: Collect 250 Coins",
+            titleAr = "جامع الذهب: اجمع 250 عملة ذهبية",
+            titleFr = "Collecter 250 pièces",
+            target = 250,
+            rewardCoins = 240,
+            rewardXp = 280
         ),
         MissionDef(
             id = "mis_jumps",
             type = MissionType.JUMP_COUNT,
-            titleEn = "Jump 25 Times",
-            titleAr = "اقفز 25 مرة",
-            titleFr = "Sauter 25 fois",
-            target = 25,
-            rewardCoins = 300,
-            rewardXp = 300
+            cadence = MissionCadence.DAILY,
+            titleEn = "Sky Leaper: Perform 45 Jumps",
+            titleAr = "قفزات البطولة: اقفز 45 مرة",
+            titleFr = "Sauter 45 fois",
+            target = 45,
+            rewardCoins = 190,
+            rewardXp = 230
         ),
         MissionDef(
             id = "mis_rival",
             type = MissionType.WIN_RIVAL_RACE,
-            titleEn = "Win an AI Rival Race",
-            titleAr = "فز في سباق المنافسين",
-            titleFr = "Gagner une course IA",
-            target = 1,
-            rewardCoins = 600,
-            rewardXp = 550
+            cadence = MissionCadence.DAILY,
+            titleEn = "Arena Champion: Win 2 AI Rival Races",
+            titleAr = "بطل السباق: فز مرتين في سباق المنافسين",
+            titleFr = "Gagner 2 courses IA",
+            target = 2,
+            rewardCoins = 350,
+            rewardXp = 380
+        ),
+        // Weekly Missions (Harder targets, rewarding multi-session progression)
+        MissionDef(
+            id = "mis_weekly_stages_10",
+            type = MissionType.COMPLETE_STAGES,
+            cadence = MissionCadence.WEEKLY,
+            titleEn = "Weekly Marathon: Complete 15 Stages",
+            titleAr = "ماراثون الأسبوع: أكمل 15 مرحلة",
+            titleFr = "Hebdo : Terminer 15 niveaux",
+            target = 15,
+            rewardCoins = 750,
+            rewardXp = 850
+        ),
+        MissionDef(
+            id = "mis_weekly_chests_3",
+            type = MissionType.OPEN_CHESTS,
+            cadence = MissionCadence.WEEKLY,
+            titleEn = "Weekly Vault Hunter: Open 6 Treasure Chests",
+            titleAr = "صائد الكنوز الأسبوعي: افتح 6 صناديق كنز",
+            titleFr = "Hebdo : Ouvrir 6 coffres au trésor",
+            target = 6,
+            rewardCoins = 820,
+            rewardXp = 920
+        ),
+        MissionDef(
+            id = "mis_weekly_coins_400",
+            type = MissionType.COLLECT_COINS,
+            cadence = MissionCadence.WEEKLY,
+            titleEn = "Weekly Treasury: Collect 900 Coins",
+            titleAr = "ثروة الأسبوع: اجمع 900 عملة ذهبية",
+            titleFr = "Hebdo : Collecter 900 pièces",
+            target = 900,
+            rewardCoins = 780,
+            rewardXp = 880
+        ),
+        // Seasonal Event Missions
+        MissionDef(
+            id = "mis_event_festival_stages",
+            type = MissionType.COMPLETE_STAGES,
+            cadence = MissionCadence.EVENT,
+            titleEn = "Event Odyssey: Complete 5 Festival Stages",
+            titleAr = "مهمة الفعالية: أكمل 5 مراحل خلال الموسم",
+            titleFr = "Événement : Terminer 5 niveaux",
+            target = 5,
+            rewardCoins = 620,
+            rewardXp = 700
+        ),
+        MissionDef(
+            id = "mis_event_royal_chest",
+            type = MissionType.OPEN_CHESTS,
+            cadence = MissionCadence.EVENT,
+            titleEn = "Event Vault: Open 3 Event or Magic Chests",
+            titleAr = "صندوق الفعالية: افتح 3 صناديق سحرية أو ملكية",
+            titleFr = "Événement : Ouvrir 3 coffres royaux",
+            target = 3,
+            rewardCoins = 680,
+            rewardXp = 760
         )
     )
 
+    val loginStreakRewards: List<LoginRewardDayDef> = listOf(
+        LoginRewardDayDef(1, 50, ChestTier.WOODEN, "Day 1 • +50", "اليوم 1 • +50"),
+        LoginRewardDayDef(2, 75, ChestTier.WOODEN, "Day 2 • +75", "اليوم 2 • +75"),
+        LoginRewardDayDef(3, 110, ChestTier.METALLIC, "Day 3 • +110", "اليوم 3 • +110"),
+        LoginRewardDayDef(4, 150, ChestTier.METALLIC, "Day 4 • +150", "اليوم 4 • +150"),
+        LoginRewardDayDef(5, 200, ChestTier.MAGIC_RARE, "Day 5 • +200", "اليوم 5 • +200"),
+        LoginRewardDayDef(6, 260, ChestTier.MAGIC_RARE, "Day 6 • +260", "اليوم 6 • +260"),
+        LoginRewardDayDef(7, 420, ChestTier.EVENT_BOSS, "Day 7 • +420", "اليوم 7 • +420")
+    )
+
+    val seasonalEvents: List<SeasonalEventDef> = listOf(
+        SeasonalEventDef(
+            id = "event_golden_lights",
+            titleEn = "Festival of Golden Lights",
+            titleAr = "مهرجان الأضواء الذهبية",
+            subtitleEn = "Glowing lanterns, golden bridges & 2x Event Chest rewards (Local Event)",
+            subtitleAr = "فوانيس مضيئة وجسور ذهبية وصندوق فعالية ملكي (محلي بدون خادم)",
+            featuredWorldId = 4,
+            featuredStageNumber = 20,
+            bannerColorHex = 0xFFFFB703,
+            accentColorHex = 0xFF00E5FF,
+            bonusChestCoins = 180
+        ),
+        SeasonalEventDef(
+            id = "event_frost_sanctuary",
+            titleEn = "Crystal Frost Sanctuary",
+            titleAr = "موسم بلورات الجليد",
+            subtitleEn = "Sparkling crystal caverns, low-friction marble & sapphire chests (Local Event)",
+            subtitleAr = "كهوف بلورية متلألئة ومنصات رخامية وصناديق ياقوتية (محلي بدون خادم)",
+            featuredWorldId = 8,
+            featuredStageNumber = 40,
+            bannerColorHex = 0xFF00B4D8,
+            accentColorHex = 0xFFFFD22B,
+            bonusChestCoins = 200
+        ),
+        SeasonalEventDef(
+            id = "event_emerald_gardens",
+            titleEn = "Mythological Gardens Odyssey",
+            titleAr = "مهرجان الحدائق الأسطورية",
+            subtitleEn = "Sky waterfalls, emerald terraces & royal guardian rewards (Local Event)",
+            subtitleAr = "شلالات معلقة وحدائق زمردية ومكافآت حارس البوابة (محلي بدون خادم)",
+            featuredWorldId = 7,
+            featuredStageNumber = 35,
+            bannerColorHex = 0xFF2EE58D,
+            accentColorHex = 0xFFFFD22B,
+            bonusChestCoins = 190
+        )
+    )
+
+    fun getActiveSeasonalEvent(epochDay: Long): SeasonalEventDef {
+        val cycleIndex = ((epochDay.coerceAtLeast(0L) / 7L) % seasonalEvents.size).toInt()
+        return seasonalEvents[cycleIndex]
+    }
+
+    fun getSeasonalEventDaysRemaining(epochDay: Long): Int {
+        val dayInWeek = (epochDay.coerceAtLeast(0L) % 7L).toInt()
+        return (7 - dayInWeek).coerceIn(1, 7)
+    }
+
     val xpMilestones: List<XpMilestoneDef> = listOf(
-        XpMilestoneDef(5, "Champion Band", 250, "hat_headband"),
-        XpMilestoneDef(10, "500 Coin Chest", 500, null),
-        XpMilestoneDef(15, "Cyber Visor", 600, "hat_visor"),
-        XpMilestoneDef(20, "Gold Sparkle Trail", 800, "trail_gold"),
-        XpMilestoneDef(25, "Star Halo", 1000, "hat_halo"),
-        XpMilestoneDef(30, "Golden Crown", 1500, "hat_crown")
+        XpMilestoneDef(5, "Champion Band", 140, "hat_headband"),
+        XpMilestoneDef(10, "300 Coin Chest", 300, null),
+        XpMilestoneDef(15, "Cyber Visor", 380, "hat_visor"),
+        XpMilestoneDef(20, "Gold Sparkle Trail", 500, "trail_gold"),
+        XpMilestoneDef(25, "Star Halo", 650, "hat_halo"),
+        XpMilestoneDef(30, "Golden Crown", 950, "hat_crown")
     )
 }
 
+enum class MissionCadence(val labelEn: String, val labelAr: String) {
+    DAILY("DAILY", "يومية"),
+    WEEKLY("WEEKLY", "أسبوعية"),
+    EVENT("EVENT", "فعالية موسمية");
+
+    fun localizedLabel(lang: AppLanguage): String =
+        if (lang == AppLanguage.AR) labelAr else labelEn
+}
+
+enum class MissionStatus(val labelEn: String, val labelAr: String) {
+    AVAILABLE("AVAILABLE", "متاحة"),
+    IN_PROGRESS("IN PROGRESS", "قيد التقدم"),
+    COMPLETED("COMPLETED", "مكتملة"),
+    CLAIMED("CLAIMED", "مستلمة");
+
+    fun localizedLabel(lang: AppLanguage): String =
+        if (lang == AppLanguage.AR) labelAr else labelEn
+}
+
 enum class MissionType {
+    SPEED_90S,
+    PERFECT_LANDINGS,
+    NO_CHECKPOINT_WIN,
+    FIND_SECRET_PATH,
+    OPEN_CHESTS,
+    CROSS_NARROW_BRIDGES,
+    NO_DASH_WIN,
     COMPLETE_STAGES,
     COLLECT_COINS,
     JUMP_COUNT,
@@ -469,13 +818,41 @@ data class MissionDef(
     val titleFr: String,
     val target: Int,
     val rewardCoins: Int,
-    val rewardXp: Int
+    val rewardXp: Int,
+    val cadence: MissionCadence = MissionCadence.DAILY
 ) {
     fun localizedTitle(lang: AppLanguage): String = when (lang) {
         AppLanguage.AR -> titleAr
         AppLanguage.FR -> titleFr
         AppLanguage.EN -> titleEn
     }
+}
+
+data class LoginRewardDayDef(
+    val dayNumber: Int,
+    val rewardCoins: Int,
+    val chestTier: ChestTier,
+    val labelEn: String,
+    val labelAr: String
+)
+
+data class SeasonalEventDef(
+    val id: String,
+    val titleEn: String,
+    val titleAr: String,
+    val subtitleEn: String,
+    val subtitleAr: String,
+    val featuredWorldId: Int,
+    val featuredStageNumber: Int,
+    val bannerColorHex: Long,
+    val accentColorHex: Long,
+    val bonusChestCoins: Int
+) {
+    fun localizedTitle(lang: AppLanguage): String =
+        if (lang == AppLanguage.AR) titleAr else titleEn
+
+    fun localizedSubtitle(lang: AppLanguage): String =
+        if (lang == AppLanguage.AR) subtitleAr else subtitleEn
 }
 
 data class XpMilestoneDef(

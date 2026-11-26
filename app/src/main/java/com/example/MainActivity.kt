@@ -5,7 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -66,7 +71,14 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    Crossfade(targetState = screen, label = "screen_crossfade") { current ->
+                    AnimatedContent(
+                        targetState = screen,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(210)) + scaleIn(initialScale = 0.97f, animationSpec = tween(210)))
+                                .togetherWith(fadeOut(animationSpec = tween(150)))
+                        },
+                        label = "screen_transition"
+                    ) { current ->
                         when (current) {
                             GameScreen.Splash -> StudioSplashScreen(elapsedSec = splashElapsedSec)
 
@@ -87,6 +99,7 @@ class MainActivity : ComponentActivity() {
                                 levelsProgress = levelsProgress,
                                 worldsProgress = worldsProgress,
                                 strings = strings,
+                                language = language,
                                 onPlayLevel = { lvl, mode -> viewModel.startLevel(lvl, mode) },
                                 onBack = { viewModel.navigateTo(GameScreen.MainMenu) }
                             )
@@ -96,6 +109,7 @@ class MainActivity : ComponentActivity() {
                                 ownedIds = ownedItems,
                                 strings = strings,
                                 onSelectOrBuySkin = viewModel::selectOrBuySkin,
+                                onBuyOrEquipItem = viewModel::buyOrEquipShopItem,
                                 onBack = { viewModel.navigateTo(GameScreen.MainMenu) }
                             )
 
@@ -127,6 +141,8 @@ class MainActivity : ComponentActivity() {
                                 language = language,
                                 strings = strings,
                                 onClaimMission = viewModel::claimMission,
+                                onClaimLoginReward = viewModel::claimDailyLoginReward,
+                                onPlaySeasonalEvent = viewModel::startSeasonalEventRun,
                                 onBack = { viewModel.navigateTo(GameScreen.MainMenu) }
                             )
 

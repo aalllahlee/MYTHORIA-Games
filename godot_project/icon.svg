@@ -1,38 +1,128 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#0E3B8C"/>
-      <stop offset="50%" stop-color="#0A1940"/>
-      <stop offset="100%" stop-color="#040816"/>
-    </linearGradient>
+    <radialGradient id="sky" cx="50%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="48%" stop-color="#1D4ED8"/>
+      <stop offset="100%" stop-color="#07102E"/>
+    </radialGradient>
     <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFF9D2"/>
-      <stop offset="50%" stop-color="#FFD22B"/>
+      <stop offset="0%" stop-color="#FFFBEB"/>
+      <stop offset="42%" stop-color="#FACC15"/>
       <stop offset="100%" stop-color="#B45309"/>
     </linearGradient>
+    <linearGradient id="skin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFE4C4"/>
+      <stop offset="100%" stop-color="#F5B895"/>
+    </linearGradient>
+    <linearGradient id="hoodie" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#991B1B"/>
+    </linearGradient>
     <linearGradient id="sapphire" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#00E5FF"/>
-      <stop offset="100%" stop-color="#0052CC"/>
+      <stop offset="0%" stop-color="#67E8F9"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+    <linearGradient id="salmaDress" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F472B6"/>
+      <stop offset="100%" stop-color="#BE185D"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="108" fill="url(#bg)" stroke="url(#gold)" stroke-width="14"/>
-  <!-- Glowing Sapphire Portal Halo -->
-  <circle cx="256" cy="214" r="142" fill="none" stroke="#00E5FF" stroke-width="5" opacity="0.55"/>
-  <!-- Symmetrical Golden Angelic Wings -->
-  <polygon points="156,220 52,148 104,196 44,202 108,236 62,254 148,268" fill="url(#gold)" stroke="#78350F" stroke-width="3"/>
-  <polygon points="356,220 460,148 408,196 468,202 404,236 450,254 364,268" fill="url(#gold)" stroke="#78350F" stroke-width="3"/>
-  <!-- 5-Peak Royal Golden Crown -->
-  <polygon points="154,198 136,118 192,154 218,96 256,68 294,96 320,154 376,118 358,198" fill="url(#gold)" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/>
-  <!-- Blue Sapphire Diamonds on Crown -->
-  <polygon points="256,118 272,146 256,174 240,146" fill="url(#sapphire)" stroke="#FFF9D2" stroke-width="3"/>
-  <polygon points="196,144 206,162 196,180 186,162" fill="url(#sapphire)" stroke="#FFF9D2" stroke-width="2"/>
-  <polygon points="316,144 326,162 316,180 306,162" fill="url(#sapphire)" stroke="#FFF9D2" stroke-width="2"/>
-  <!-- Ancient Stone & Gold Shield Plaque -->
-  <polygon points="84,212 428,212 404,352 256,396 108,352" fill="#0D1636" stroke="url(#gold)" stroke-width="8"/>
-  <text x="256" y="276" font-family="serif" font-weight="900" font-size="56" fill="url(#gold)" text-anchor="middle">MYTHORIA</text>
-  <text x="256" y="318" font-family="serif" font-weight="800" font-size="28" fill="#00E5FF" text-anchor="middle">— games —</text>
-  <text x="256" y="362" font-family="serif" font-style="italic" font-weight="700" font-size="28" fill="#FFF3B0" text-anchor="middle">By ahmed</text>
-  <!-- Game Title Banner at Base -->
-  <rect x="116" y="416" width="280" height="58" rx="22" fill="#132D6A" stroke="url(#gold)" stroke-width="5"/>
-  <text x="256" y="454" font-family="sans-serif" font-weight="900" font-size="34" fill="#FFD22B" text-anchor="middle">DON'T FALL!</text>
+
+  <!-- Outer Rounded Royal Frame -->
+  <rect width="512" height="512" rx="112" fill="url(#sky)" stroke="url(#gold)" stroke-width="16"/>
+  <rect x="14" y="14" width="484" height="484" rx="98" fill="none" stroke="#38BDF8" stroke-width="3" opacity="0.5"/>
+
+  <!-- Radiant Sunburst Rays -->
+  <g opacity="0.22" fill="#FDE047">
+    <polygon points="256,210 70,24 140,24"/>
+    <polygon points="256,210 220,16 292,16"/>
+    <polygon points="256,210 372,24 442,24"/>
+    <polygon points="256,210 492,120 492,188"/>
+    <polygon points="256,210 20,120 20,188"/>
+  </g>
+
+  <!-- Background Floating Greek Sky Island & Waterfall -->
+  <g opacity="0.92">
+    <polygon points="56,292 168,292 142,356 112,384 82,356" fill="#64748B" stroke="#1E293B" stroke-width="3"/>
+    <rect x="52" y="280" width="120" height="18" rx="9" fill="#22C55E"/>
+    <rect x="102" y="294" width="20" height="86" rx="6" fill="url(#sapphire)"/>
+    <!-- Mini Greek Temple -->
+    <rect x="74" y="242" width="10" height="38" fill="#F8FAFC"/>
+    <rect x="107" y="242" width="10" height="38" fill="#F8FAFC"/>
+    <rect x="140" y="242" width="10" height="38" fill="#F8FAFC"/>
+    <polygon points="64,242 160,242 112,212" fill="url(#gold)" stroke="#78350F" stroke-width="2"/>
+  </g>
+
+  <!-- Right Side Salma Girl Character Cameo -->
+  <g transform="translate(384, 248) scale(0.82)">
+    <!-- Twin Pigtails -->
+    <circle cx="-48" cy="-34" r="22" fill="#3B1E08"/>
+    <circle cx="48" cy="-34" r="22" fill="#3B1E08"/>
+    <circle cx="-38" cy="-36" r="8" fill="#F472B6"/>
+    <circle cx="38" cy="-36" r="8" fill="#F472B6"/>
+    <!-- Body Dress -->
+    <path d="M-38,24 C-38,-2 38,-2 38,24 L46,78 L-46,78 Z" fill="url(#salmaDress)" stroke="#FFFFFF" stroke-width="4"/>
+    <!-- Head -->
+    <circle cx="0" cy="-22" r="38" fill="url(#skin)" stroke="#78350F" stroke-width="3"/>
+    <!-- Eyes & Smile -->
+    <circle cx="-14" cy="-22" r="7" fill="#0F172A"/>
+    <circle cx="14" cy="-22" r="7" fill="#0F172A"/>
+    <circle cx="-12" cy="-25" r="2.5" fill="#FFFFFF"/>
+    <circle cx="16" cy="-25" r="2.5" fill="#FFFFFF"/>
+    <circle cx="-22" cy="-12" r="6" fill="#FB7185" opacity="0.65"/>
+    <circle cx="22" cy="-12" r="6" fill="#FB7185" opacity="0.65"/>
+    <path d="M-10,-8 Q0,2 10,-8" fill="none" stroke="#991B1B" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- Tiara -->
+    <polygon points="-22,-54 -10,-78 0,-62 10,-78 22,-54" fill="url(#gold)" stroke="#78350F" stroke-width="2.5"/>
+  </g>
+
+  <!-- Center Hero Kid "Ahmed" Leaping Over Golden Platform -->
+  <g transform="translate(248, 224)">
+    <!-- Golden Wings -->
+    <path d="M-46,8 C-112,-38 -124,18 -64,36 C-108,42 -96,76 -44,56 Z" fill="url(#gold)" stroke="#78350F" stroke-width="3.5"/>
+    <path d="M46,8 C112,-38 124,18 64,36 C108,42 96,76 44,56 Z" fill="url(#gold)" stroke="#78350F" stroke-width="3.5"/>
+    <!-- Rounded Capsule Body -->
+    <rect x="-48" y="-4" width="96" height="104" rx="46" fill="url(#hoodie)" stroke="#FFFFFF" stroke-width="4"/>
+    <!-- Golden Collar & Medallion -->
+    <rect x="-40" y="2" width="80" height="16" rx="8" fill="url(#gold)"/>
+    <circle cx="0" cy="40" r="18" fill="url(#gold)" stroke="#78350F" stroke-width="3"/>
+    <circle cx="0" cy="40" r="10" fill="url(#sapphire)"/>
+    <!-- Raised Cheering Arms -->
+    <rect x="-76" y="-26" width="28" height="58" rx="14" transform="rotate(-28 -62 0)" fill="url(#hoodie)" stroke="#FACC15" stroke-width="3"/>
+    <circle cx="-76" cy="-26" r="14" fill="url(#skin)"/>
+    <rect x="48" y="-26" width="28" height="58" rx="14" transform="rotate(28 62 0)" fill="url(#hoodie)" stroke="#FACC15" stroke-width="3"/>
+    <circle cx="76" cy="-26" r="14" fill="url(#skin)"/>
+    <!-- Expressive 3D Cartoon Head -->
+    <circle cx="0" cy="-48" r="54" fill="url(#skin)" stroke="#78350F" stroke-width="4"/>
+    <!-- Ears & Rosy Cheeks -->
+    <circle cx="-52" cy="-46" r="11" fill="url(#skin)"/>
+    <circle cx="52" cy="-46" r="11" fill="url(#skin)"/>
+    <ellipse cx="-30" cy="-34" rx="9" ry="6" fill="#FB7185" opacity="0.65"/>
+    <ellipse cx="30" cy="-34" rx="9" ry="6" fill="#FB7185" opacity="0.65"/>
+    <!-- Big Glossy Cartoon Eyes -->
+    <ellipse cx="-20" cy="-50" rx="13" ry="15" fill="#FFFFFF"/>
+    <ellipse cx="20" cy="-50" rx="13" ry="15" fill="#FFFFFF"/>
+    <circle cx="-19" cy="-49" r="9.5" fill="#1D4ED8"/>
+    <circle cx="19" cy="-49" r="9.5" fill="#1D4ED8"/>
+    <circle cx="-19" cy="-49" r="5.5" fill="#0F172A"/>
+    <circle cx="19" cy="-49" r="5.5" fill="#0F172A"/>
+    <circle cx="-15" cy="-54" r="3.8" fill="#FFFFFF"/>
+    <circle cx="23" cy="-54" r="3.8" fill="#FFFFFF"/>
+    <!-- Happy Open Smile -->
+    <path d="M-16,-28 Q0,-12 16,-28 Z" fill="#FFFFFF" stroke="#78350F" stroke-width="3"/>
+    <!-- Swooping Hair & Royal Mythoria Crown -->
+    <path d="M-48,-72 Q0,-106 48,-72 Q26,-84 0,-76 Q-26,-84 -48,-72 Z" fill="#451A03"/>
+    <polygon points="-44,-88 -34,-132 -12,-106 0,-142 12,-106 34,-132 44,-88" fill="url(#gold)" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="0" cy="-106" r="8" fill="url(#sapphire)" stroke="#FFFFFF" stroke-width="2"/>
+    <circle cx="-24" cy="-102" r="5.5" fill="#F43F5E"/>
+    <circle cx="24" cy="-102" r="5.5" fill="#F43F5E"/>
+  </g>
+
+  <!-- Bottom 3D Game Title Plaque -->
+  <rect x="44" y="346" width="424" height="84" rx="28" fill="#0B173D" stroke="url(#gold)" stroke-width="8"/>
+  <text x="256" y="403" font-family="sans-serif" font-weight="900" font-size="54" fill="url(#gold)" stroke="#040816" stroke-width="3" text-anchor="middle">DON'T FALL!</text>
+
+  <!-- Studio Signature Ribbon -->
+  <rect x="96" y="438" width="320" height="44" rx="18" fill="#172554" stroke="#38BDF8" stroke-width="3"/>
+  <text x="256" y="467" font-family="serif" font-weight="900" font-size="22" fill="#67E8F9" text-anchor="middle">MYTHORIA games • By ahmed</text>
 </svg>
